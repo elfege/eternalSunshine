@@ -219,7 +219,7 @@ state.lastMotionEvent: ${state.lastMotionEvent}"""
 def mainloop(){
 
     /**********************************************************************/
-    //runIn(10, mainloop) // DEBUG ONLY DON'T FORGET TO COMMENT OUT AFTER
+    runIn(10, mainloop) // DEBUG ONLY DON'T FORGET TO COMMENT OUT AFTER
     /**********************************************************************/
     boolean outofmodes = location.mode in restrictedModes
     log.info "outofmodes = $outofmodes || location.mode = ${location.mode} || restrictedModes = $restrictedModes "
@@ -349,11 +349,19 @@ def setDimmers(int val){
 
     if(state.dimVal == val)
     {
-
+        
+        logging(
+            """
+-------------------
+isNotOff = $isNotOff
+motionSensors = $motionSensors
+-------------------
+"""
+               )
         i = 0
         for(s != 0; i < s; i++){
             isNotOff = dimmers[i].currentValue("switch") == "on" 
-            if(isNotOff || motionsensors){ // with motion off status doesn't stop the app
+            if(isNotOff || motionSensors){ // with motion off status doesn't stop the app
                 dimmers[i].setLevel(val)
 
                 logging("${dimmers[i]} set to $val")
