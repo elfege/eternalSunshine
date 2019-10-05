@@ -170,7 +170,7 @@ def initialize() {
 def switchHandler(evt){
     logging("$evt.device is now set to $evt.value - - SOURCE: is $evt.source TYPE is $evt.type")
     state.lastEvent = evt.name
-    //mainloop() // infinite loop, idiot!
+    //mainloop() // infinite feedback loop, idiot!
 }
 
 def locationModeChangeHandler(evt)
@@ -183,7 +183,7 @@ def dimmersHandler(evt){
     logging("$evt.device set to $evt.value, state.dimVal = $state.dimVal, evt.value == state.dimVal :? ${evt.value == state.dimVal}")
 
     state.lastEvent = evt.name 
-    //mainloop() // infinite loop, idiot!
+    //mainloop() // infinite feedback loop, idiot!
 }
 
 def illuminanceHandler(evt){
@@ -219,7 +219,7 @@ state.lastMotionEvent: ${state.lastMotionEvent}"""
 def mainloop(){
 
     /**********************************************************************/
-    runIn(10, mainloop) // DEBUG ONLY DON'T FORGET TO COMMENT OUT AFTER
+    //runIn(10, mainloop) // DEBUG ONLY DON'T FORGET TO COMMENT OUT AFTER
     /**********************************************************************/
     boolean outofmodes = location.mode in restrictedModes
     log.info "outofmodes = $outofmodes || location.mode = ${location.mode} || restrictedModes = $restrictedModes "
