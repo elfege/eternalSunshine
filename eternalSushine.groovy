@@ -180,7 +180,7 @@ def locationModeChangeHandler(evt)
 }
 
 def dimmersHandler(evt){
-    logging("$evt.device set to $evt.value, state.dimVal = $state.dimVal, evt.value == state.dimVal :? ${evt.value == state.dimVal}")
+    logging("$evt.device set to $evt.value, state.dimVal = $state.dimVal, evt.value == state.dimVal :? ${evt.value == state.dimVal} SOURCE: is $evt.source TYPE is $evt.type")
 
     state.lastEvent = evt.name 
     //mainloop() // infinite feedback loop, idiot!
@@ -416,16 +416,20 @@ def logging(message)
     if(state.enablelogging) log.debug message
 }
 
-/*
-//noMotionTime = 1000  /// TEST ONLY comment out after, noMotionTime being called from settings
+/* 
+ // event collections, once within iteration, can take several seconds on HE platform, 
+bugging everything else in the process, for some reason, even after using code recommended by HE's staff... 
+
+//noMotionTime = 1000  /// TEST ONLY
 long deltaMinutes = noMotionTime * 1000 * 60   
 int s = motionSensors.size() 
 int i = 0
+def thisDeviceEvents = []
+int events = 0
 
-for(s != 0; i < s; i++) // if any of the sensors returns at least one event within the time threshold, then return true
+for(s != 0; (i < s && events == 0); i++) // if any of the sensors returns at least one event within the time threshold, then break this loop and return true
 { 
-
-thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor
-events += thisDeviceEvents.size()
+def thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
+events += thisDeviceEvents.size() 
 }
 */
