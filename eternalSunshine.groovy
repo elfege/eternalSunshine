@@ -168,7 +168,7 @@ def initialize() {
 }
 
 def switchHandler(evt){
-    logging("$evt.device is now set to $evt.value - - SOURCE: is $evt.source TYPE is $evt.type")
+    logging("$evt.device is now set to $evt.value - - SOURCE: is $evt.source TYPE is $evt.type isPhysical: ${evt.isPhysical()}")
     state.lastEvent = evt.name
     //mainloop() // infinite feedback loop, idiot!
 }
@@ -197,16 +197,18 @@ def illuminanceHandler(evt){
 def motionHandler(evt){
 
 
-    log.info "motion is now $evt.value at $evt.device dimmers are: $dimmers"
+    logging("motion is now $evt.value at $evt.device dimmers are: $dimmers")
     if(evt.value == "active")
     {
-        dimmers.setLevel(state.dimVal)
+        
+        //dimmers.setLevel(state.dimVal)
+        setDimmers(state.dimVal)
         state.motionEvents += 1
 
         //long lastMotionEvent = now() as long
-        log.info """
+        logging("""
 collecting $evt.value event for $evt.device
-state.lastMotionEvent: ${state.lastMotionEvent}"""
+state.lastMotionEvent: ${state.lastMotionEvent}""")
         state.lastMotionEvent = now() as long
 
             }
@@ -222,12 +224,12 @@ def mainloop(){
     runIn(10, mainloop) // DEBUG ONLY DON'T FORGET TO COMMENT OUT AFTER
     /**********************************************************************/
     boolean outofmodes = location.mode in restrictedModes
-    log.info "outofmodes = $outofmodes || location.mode = ${location.mode} || restrictedModes = $restrictedModes "
+    logging("outofmodes = $outofmodes || location.mode = ${location.mode} || restrictedModes = $restrictedModes ")
 
 
     if(outofmodes)
     {
-        log.info "App paused due to modes restrictions"
+        logging("App paused due to modes restrictions")
     }
     else
     {
@@ -254,7 +256,7 @@ def mainloop(){
                 dimmersSwitchState << swState
             }
 
-            log.info"dimmersLevelState : ${dimmersLevelState} dimmers states are ${dimmersSwitchState}, illuminance is: $illum"
+            logging("dimmersLevelState : ${dimmersLevelState} dimmers states are ${dimmersSwitchState}, illuminance is: $illum")
             def dimVal = getDimVal()
             setDimmers(dimVal)
         }
@@ -284,13 +286,13 @@ def getDimVal()
     if(!state.maxValue)
     {
         state.maxValue = 1000
-        log.info "state.maxValue reset to 1000 because it was null"
+        logging("state.maxValue reset to 1000 because it was null")
     }
     // learn max value
     if(illum.toInteger() > state.maxValue.toInteger())
     {
         state.maxValue = illum
-        log.info "new maximum lux value registered as: $state.maxValue"
+        logging("new maximum lux value registered as: $state.maxValue")
     }
 
     def xa = 0    // min illuminance
@@ -349,7 +351,7 @@ def setDimmers(int val){
 
     if(state.dimVal == val)
     {
-        
+
         logging(
             """
 -------------------
@@ -357,14 +359,21 @@ isNotOff = $isNotOff
 motionSensors = $motionSensors
 -------------------
 """
-               )
+        )
         i = 0
         for(s != 0; i < s; i++){
             isNotOff = dimmers[i].currentValue("switch") == "on" 
             if(isNotOff || motionSensors){ // with motion off status doesn't stop the app
-                dimmers[i].setLevel(val)
+                if(dimmers[i].currentValue("level") != val)
+                {
+                    dimmers[i].setLevel(val)
 
-                logging("${dimmers[i]} set to $val")
+                    logging("${dimmers[i]} set to $val")
+                }
+                else 
+                {
+                    logging("${dimmers[i]} ALREADY set to $val")
+                }
             }
             else {
                 logging("${dimmers[i]} is off")
@@ -374,7 +383,7 @@ motionSensors = $motionSensors
     }
     else 
     {
-        log.info "FAILED TO UPDATE DATABASE"
+        log.warn "FAILED TO UPDATE DATABASE"
     }
 
     logging("state.dimVal = $state.dimVal val = $val")
@@ -384,7 +393,7 @@ motionSensors = $motionSensors
 boolean stillActive()
 {
 
-    log.info "state.motionEvents = $state.motionEvents"
+    logging("state.motionEvents = $state.motionEvents")
     int events = state.motionEvents
     boolean result = true // default is true  always return Active = true when no sensor is selected by the user
 
@@ -397,19 +406,19 @@ boolean stillActive()
             boolean MotiontimeOut = lastMotionEvent > timeOutMillis
         int minutes = lastMotionEvent/1000/60
         //log.debug "minutes = $minutes"
-        log.info "MotiontimeOut = $MotiontimeOut | lastMotionEvent = $lastMotionEvent" // ${if((lastMotionEvent/1000)>=60){"${Math.round(minutes)} minutes"}else{"${(lastMotionEvent/1000)} seconds"}} ago"
+        logging("MotiontimeOut = $MotiontimeOut | lastMotionEvent = $lastMotionEvent") // ${if((lastMotionEvent/1000)>=60){"${Math.round(minutes)} minutes"}else{"${(lastMotionEvent/1000)} seconds"}} ago"
 
         if(MotiontimeOut)
         {
             state.motionEvents = 0
-            log.info "motion time out!"
+            logging("motion time out!")
         }
         //result = state.motionEvents >= 1 // loop breaks when 1 sensor returns more than 0 event, so see if that's the case here
 
         result = !MotiontimeOut
     } 
 
-    log.info "motion returns ${result} with $events events in the last $noMotionTime minutes"
+    logging("motion returns ${result} with $events events in the last $noMotionTime minutes")
     return result
 }
 
@@ -425,7 +434,7 @@ def logging(message)
 }
 
 /* 
- // event collections, once within iteration, can take several seconds on HE platform, 
+// event collections, once within iteration, can take several seconds on HE platform, 
 bugging everything else in the process, for some reason, even after using code recommended by HE's staff... 
 
 //noMotionTime = 1000  /// TEST ONLY
