@@ -221,7 +221,7 @@ state.lastMotionEvent: ${state.lastMotionEvent}""")
 def mainloop(){
 
     /**********************************************************************/
-    runIn(10, mainloop) // DEBUG ONLY DON'T FORGET TO COMMENT OUT AFTER
+    //runIn(10, mainloop) // DEBUG ONLY DON'T FORGET TO COMMENT OUT AFTER
     /**********************************************************************/
     boolean outofmodes = location.mode in restrictedModes
     logging("outofmodes = $outofmodes || location.mode = ${location.mode} || restrictedModes = $restrictedModes ")
