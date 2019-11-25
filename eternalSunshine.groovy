@@ -429,7 +429,7 @@ def resetMotionEvents()
 
 def logging(message)
 {
-    state.enablelogging = true
+    //state.enablelogging = true // FOR DEBUG ONLY COMMENT OUT AFTER YOU'RE DONE TESTING
     if(state.enablelogging) log.debug message
 }
 
