@@ -200,18 +200,20 @@ def motionHandler(evt){
     logging("motion is now $evt.value at $evt.device dimmers are: $dimmers")
     if(evt.value == "active")
     {
-        
+
         //dimmers.setLevel(state.dimVal)
+        dimmers.on()
         setDimmers(state.dimVal)
+
         state.motionEvents += 1
 
-        //long lastMotionEvent = now() as long
-        logging("""
+        def lastMotionEvent = new Date().format("h:mm a", location.timeZone)  // format just for debug purpose
+        state.lastMotionEvent = now() as long // use raw long value
+            logging("""
 collecting $evt.value event for $evt.device
-state.lastMotionEvent: ${state.lastMotionEvent}""")
-        state.lastMotionEvent = now() as long
+state.lastMotionEvent: ${lastMotionEvent}""")
 
-            }
+    }
     mainloop()
 
 }   
@@ -219,6 +221,8 @@ state.lastMotionEvent: ${state.lastMotionEvent}""")
 
 
 def mainloop(){
+
+
 
     /**********************************************************************/
     //runIn(10, mainloop) // DEBUG ONLY DON'T FORGET TO COMMENT OUT AFTER
@@ -394,7 +398,7 @@ boolean stillActive()
 {
 
     logging("state.motionEvents = $state.motionEvents")
-    int events = state.motionEvents
+    //int events = state.motionEvents //as int
     boolean result = true // default is true  always return Active = true when no sensor is selected by the user
 
     if(motionSensors)
@@ -418,7 +422,7 @@ boolean stillActive()
         result = !MotiontimeOut
     } 
 
-    logging("motion returns ${result} with $events events in the last $noMotionTime minutes")
+    logging("motion returns ${result} with $state.motionEvents events in the last $noMotionTime minutes")
     return result
 }
 
