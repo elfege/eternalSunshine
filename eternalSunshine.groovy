@@ -30,15 +30,59 @@ preferences {
 }
 
 def pageSetup() {
+
+    if(state.paused)
+    {
+        //app.updateLabel(app.label + ("<font color = 'red'> (Paused) </font>" ))
+
+        log.debug "new app label: ${app.label}"
+
+        while(app.label.contains(" (Paused) "))
+        {
+            app.updateLabel(app.label.minus("(Paused)" ))
+        }
+        //app.updateLabel(app.label.minus("<font color = 'red'> (Paused) </font>" ))
+        app.updateLabel(app.label + ("<font color = 'red'> (Paused) </font>" ))
+
+    }
+    else if(app.label.contains("(Paused)"))
+    {
+        app.updateLabel(app.label.minus("<font color = 'red'> (Paused) </font>" ))
+        //app.updateLabel(app.label.minus(" "))
+        while(app.label.contains(" (Paused) "))        {app.updateLabel(app.label.minus("(Paused)" ))}
+
+        log.debug "new app label: ${app.label}"
+    }
+
+
     def pageProperties = [
         name:       "pageSetup",
-        title:      "Status",
+        title:      "${app.label}",
         nextPage:   null,
         install:    true,
         uninstall:  true
     ]
 
     return dynamicPage(pageProperties) {
+
+        if(state.paused == true)
+        {
+            state.button_name = "resume"
+            log.debug "button name is: $state.button_name"
+        }
+        else 
+        {
+            state.button_name = "pause"
+            log.debug "button name is: $state.button_name"
+        }
+        section("buttons")
+        {
+            paragraph " ", width: 12
+            input "pause", "button", title: "$state.button_name"12
+            paragraph " ", width: 12
+           input "update", "button", title: "UPDATE", width: 12
+
+        }
 
         section("Select the dimmers you wish to control") {
             input "dimmers", "capability.switchLevel", title: "pick a dimmer", required:true, multiple: true      
@@ -69,8 +113,6 @@ def pageSetup() {
                 input "switchState", "enum", title: "when it is on or off?", options: ["when on", "when off"]
             }
         }
-
-
         section("Location Modes Management") {
             input "modemgt", "bool", title: "Differentiate Maximum Dimmers' Values With Location Mode", submitOnChange: true
             if(modemgt)
@@ -88,8 +130,7 @@ def pageSetup() {
                 }
             }
         }
-        section("Motion Management")
-        {
+        section("Motion Management")        {
             input "usemotion", "bool", title: "Turn On / Off with Motion", submitOnChange: true
             if(usemotion)
             {
@@ -100,8 +141,7 @@ def pageSetup() {
                 }
             }
         }
-        section("modes")
-        {
+        section("modes")        {
             input "restrictedModes", "mode", title:"Pause this app if location is in one of these modes", required: false, multiple: true, submitOnChange: true 
         }
         section() {
@@ -111,7 +151,6 @@ def pageSetup() {
         {
             input("enablelogging", "bool", title:"Enable logging", value:false)   
         }
-
     }
 }
 
@@ -119,14 +158,12 @@ def installed() {
     logging("Installed with settings: ${settings}")
     initialize()
 }
-
 def updated() {
     logging("updated with settings: ${settings}")
     unsubscribe()
     unschedule()
     initialize()
 }
-
 def initialize() {
 
     state.motionEvents = 0
@@ -172,20 +209,16 @@ def switchHandler(evt){
     state.lastEvent = evt.name
     //mainloop() // infinite feedback loop, idiot!
 }
-
-def locationModeChangeHandler(evt)
-{
+def locationModeChangeHandler(evt){
     logging("$evt.name is now in $evt.value mode")   
     mainloop()
 }
-
 def dimmersHandler(evt){
     logging("$evt.device set to $evt.value, state.dimVal = $state.dimVal, evt.value == state.dimVal :? ${evt.value == state.dimVal} SOURCE: is $evt.source TYPE is $evt.type")
 
     state.lastEvent = evt.name 
     //mainloop() // infinite feedback loop, idiot!
 }
-
 def illuminanceHandler(evt){
     logging("$evt.device returns $evt.value")
 
@@ -193,7 +226,6 @@ def illuminanceHandler(evt){
     mainloop()
 
 }
-
 def motionHandler(evt){
 
 
@@ -205,24 +237,49 @@ def motionHandler(evt){
         dimmers.on()
         setDimmers(state.dimVal)
 
-        state.motionEvents += 1
 
-        def lastMotionEvent = new Date().format("h:mm a", location.timeZone)  // format just for debug purpose
-        state.lastMotionEvent = now() as long // use raw long value
-            logging("""
+        state.motionEvents += 1
+        runIn((noMotionTime*60), resetMotionEvents) // overwrite is default
+        log.info("$state.motionEvents active motion events in the last $noMotionTime minutes")
+        
+        /*
+def lastMotionEvent = new Date().format("h:mm a", location.timeZone)  // format just for debug purpose
+state.lastMotionEvent = now() as long // use raw long value
+logging("""
 collecting $evt.value event for $evt.device
 state.lastMotionEvent: ${lastMotionEvent}""")
+*/
 
     }
     mainloop()
 
-}   
-
+}
+def appButtonHandler(btn) {
+    switch(btn) {
+        case "pause":state.paused = !state.paused
+        log.debug "state.paused = $state.paused"
+        if(state.paused)
+        {
+            log.debug "unsuscribing from events..."
+            unsubscribe()  
+            log.debug "unschedule()..."
+            unschedule()
+            break
+        }
+        else
+        {
+            initialize()            
+            break
+        }
+        case "update":
+        state.paused = false
+        initialize()
+        break
+    }
+}
 
 
 def mainloop(){
-
-
 
     /**********************************************************************/
     //runIn(10, mainloop) // DEBUG ONLY DON'T FORGET TO COMMENT OUT AFTER
@@ -241,7 +298,8 @@ def mainloop(){
         state.enablelogging = enablelogging as boolean
             // state.enablelogging = true // FOR DEV DEBUG ONLY
 
-            if(stillActive())
+           // if(stillActive())
+            if(state.motionEvents > 0)
         {
 
             def illum = sensor.currentValue("illuminance")
@@ -393,41 +451,52 @@ motionSensors = $motionSensors
     logging("state.dimVal = $state.dimVal val = $val")
 }
 
-
 boolean stillActive()
 {
 
-    logging("state.motionEvents = $state.motionEvents")
-    //int events = state.motionEvents //as int
     boolean result = true // default is true  always return Active = true when no sensor is selected by the user
+
 
     if(motionSensors)
     {
         logging("motion test is running and collecting events at $motionSensors")
 
-        long lastMotionEvent = now() - state.lastMotionEvent
-        long timeOutMillis = noMotionTime * 1000 * 60 as long
-            boolean MotiontimeOut = lastMotionEvent > timeOutMillis
-        int minutes = lastMotionEvent/1000/60
-        //log.debug "minutes = $minutes"
-        logging("MotiontimeOut = $MotiontimeOut | lastMotionEvent = $lastMotionEvent") // ${if((lastMotionEvent/1000)>=60){"${Math.round(minutes)} minutes"}else{"${(lastMotionEvent/1000)} seconds"}} ago"
+        //long deltaMinutes = noMotionTime * 1000 * 60   
+        long deltaMinutes = 1 * 1000 * 60 
+        int s = motionSensors.size() 
+        logging("--------motionSensors size = $s")
+        int i = 0
+        def thisDeviceEvents = []
+        int events = 0
 
-        if(MotiontimeOut)
-        {
-            state.motionEvents = 0
-            logging("motion time out!")
-        }
-        //result = state.motionEvents >= 1 // loop breaks when 1 sensor returns more than 0 event, so see if that's the case here
+        long tB4 = now()
+        //log.warn "tB4 = $tB4"
 
-        result = !MotiontimeOut
+        /*for(s != 0; i < s; i++) 
+{ 
+//thisDeviceEvents = motionSensors[i].collect{ it.eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active" }.flatten()
+//thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
+events += thisDeviceEvents.size() // aggregate the total number of events
+//pauseExecution(10)
+}
+*/
+
+        double elapsed = (now() - tB4)/1000/60
+        log.info "motion events collection took $elapsed seconds for $i devices"
+
+        state.motionEvents = events
+        result = events > 0
+
+        //result = !MotiontimeOut
     } 
 
-    logging("motion returns ${result} with $state.motionEvents events in the last $noMotionTime minutes")
+    log.info "motion returns ${result} with $state.motionEvents events in the last $noMotionTime minutes"
     return result
 }
 
 def resetMotionEvents()
 {
+    log.info "No motion event has occured during the past $noMotionTime minutes"
     state.motionEvents = 0   
 }
 
@@ -437,20 +506,3 @@ def logging(message)
     if(state.enablelogging) log.debug message
 }
 
-/* 
-// event collections, once within iteration, can take several seconds on HE platform, 
-bugging everything else in the process, for some reason, even after using code recommended by HE's staff... 
-
-//noMotionTime = 1000  /// TEST ONLY
-long deltaMinutes = noMotionTime * 1000 * 60   
-int s = motionSensors.size() 
-int i = 0
-def thisDeviceEvents = []
-int events = 0
-
-for(s != 0; (i < s && events == 0); i++) // if any of the sensors returns at least one event within the time threshold, then break this loop and return true
-{ 
-def thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
-events += thisDeviceEvents.size() 
-}
-*/
