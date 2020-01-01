@@ -77,10 +77,10 @@ def pageSetup() {
         }
         section("buttons")
         {
-            paragraph " ", width: 12
-            input "pause", "button", title: "$state.button_name"12
-            paragraph " ", width: 12
-           input "update", "button", title: "UPDATE", width: 12
+            paragraph " ", width: 7
+            input "pause", "button", title: "$state.button_name", width: 7
+            paragraph " ", width: 6
+            input "update", "button", title: "UPDATE", width: 6
 
         }
 
@@ -241,7 +241,7 @@ def motionHandler(evt){
         state.motionEvents += 1
         runIn((noMotionTime*60), resetMotionEvents) // overwrite is default
         log.info("$state.motionEvents active motion events in the last $noMotionTime minutes")
-        
+
         /*
 def lastMotionEvent = new Date().format("h:mm a", location.timeZone)  // format just for debug purpose
 state.lastMotionEvent = now() as long // use raw long value
@@ -298,7 +298,7 @@ def mainloop(){
         state.enablelogging = enablelogging as boolean
             // state.enablelogging = true // FOR DEV DEBUG ONLY
 
-           // if(stillActive())
+            // if(stillActive())
             if(state.motionEvents > 0)
         {
 
@@ -470,16 +470,17 @@ boolean stillActive()
         int events = 0
 
         long tB4 = now()
-        //log.warn "tB4 = $tB4"
+        log.warn "tB4 = $tB4"
 
-        /*for(s != 0; i < s; i++) 
-{ 
-//thisDeviceEvents = motionSensors[i].collect{ it.eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active" }.flatten()
-//thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
-events += thisDeviceEvents.size() // aggregate the total number of events
-//pauseExecution(10)
-}
-*/
+        for(s != 0; i < s; i++) 
+        { 
+            //thisDeviceEvents = motionSensors[i].collect{ it.eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active" }.flatten()
+            //thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
+
+            thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
+            events += thisDeviceEvents.size() // aggregate the total number of events
+
+        }
 
         double elapsed = (now() - tB4)/1000/60
         log.info "motion events collection took $elapsed seconds for $i devices"
@@ -506,3 +507,35 @@ def logging(message)
     if(state.enablelogging) log.debug message
 }
 
+/* 
+// event collections, once within iteration, can take several seconds on HE platform, 
+bugging everything else in the process, for some reason, even after using code recommended by HE's staff... 
+
+//noMotionTime = 1000  /// TEST ONLY
+long deltaMinutes = noMotionTime * 1000 * 60   
+int s = motionSensors.size() 
+int i = 0
+def thisDeviceEvents = []
+int events = 0
+
+for(s != 0; (i < s && events == 0); i++) // if any of the sensors returns at least one event within the time threshold, then break this loop and return true
+{ 
+def thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
+events += thisDeviceEvents.size() 
+}
+*/
+
+/*
+long lastMotionEvent = now() - state.lastMotionEvent
+long timeOutMillis = noMotionTime * 1000 * 60 as long
+boolean MotiontimeOut = lastMotionEvent > timeOutMillis
+int minutes = lastMotionEvent/1000/60
+//log.debug "minutes = $minutes"
+logging("MotiontimeOut = $MotiontimeOut | lastMotionEvent = $lastMotionEvent") // ${if((lastMotionEvent/1000)>=60){"${Math.round(minutes)} minutes"}else{"${(lastMotionEvent/1000)} seconds"}} ago"
+
+if(MotiontimeOut)
+{
+state.motionEvents = 0
+logging("motion time out!")
+}
+*/
