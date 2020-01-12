@@ -118,7 +118,7 @@ def pageSetup() {
             input "modemgt", "bool", title: "Differentiate Maximum Dimmers' Values With Location Mode", submitOnChange: true
             if(modemgt)
             {
-                input "modes", "mode", title:"select modes", required: false, multiple: true, submitOnChange: true
+                input "modes", "mode", title:"select modes", required: true, multiple: true, submitOnChange: true
 
                 if(modes){
                     def i = 0
@@ -170,12 +170,21 @@ def updated() {
 }
 def initialize() {
 
+    if(enablelogging){runIn(1800, disablelogging)}
+    
     state.motionEvents = 0
     state.lastMotionEvent = now() as long
         state.override = false
     state.lastDimVal = dimmers[0].currentValue("level")
-    state.enablelogging = enablelogging as boolean
-        int i = 0
+    
+
+        if(!state.maxValue)
+    {
+        state.maxValue = 1000
+        logging("state.maxValue reset to 1000 because it was null")
+    }
+
+    int i = 0
     int s = 0
 
     if(motionSensors)
@@ -197,12 +206,9 @@ def initialize() {
     }
 
     subscribe(modes, "mode", locationModeChangeHandler)
-
-
     subscribe(sensor, "illuminance", illuminanceHandler)
 
-
-    schedule("0 0/1 * * * ?", mainloop) 
+    //schedule("0 0/1 * * * ?", mainloop) 
 
     logging("initialization ok")
     mainloop()
@@ -211,7 +217,7 @@ def initialize() {
 def switchHandler(evt){
     logging("$evt.device is now set to $evt.value - - SOURCE: is $evt.source TYPE is $evt.type isPhysical: ${evt.isPhysical()}")
     state.lastEvent = evt.name
-    //mainloop() // infinite feedback loop, idiot!
+    //mainloop() // infinite feedback loop!
 }
 def locationModeChangeHandler(evt){
     logging("$evt.name is now in $evt.value mode")   
@@ -220,13 +226,11 @@ def locationModeChangeHandler(evt){
 def dimmersHandler(evt){
     logging("$evt.device set to $evt.value, state.dimVal = $state.dimVal, evt.value == state.dimVal :? ${evt.value == state.dimVal} SOURCE: is $evt.source TYPE is $evt.type")
 
-    state.lastEvent = evt.name 
-    //mainloop() // infinite feedback loop, idiot!
+    //mainloop() // infinite feedback loop!
 }
 def illuminanceHandler(evt){
     logging("$evt.device returns $evt.value")
 
-    state.lastEvent = evt.name
     mainloop()
 
 }
@@ -268,7 +272,7 @@ def appButtonHandler(btn) {
         initialize()
         break
         case "run":
-        if(!state.pause) mainloop()
+        if(!state.paused) mainloop()
         break
 
     }
@@ -374,9 +378,22 @@ def setDimmers(int val){
         }
     }
 
-    dimmers.setLevel(val)
+    i = 0
+    for(s!=0;i<s;i++)
+    {
+        def a = dimmers[i]
+        def aVal = dimmers[i].currentValue("level")
+        def message = "a is currently at ${aVal}% and needs to be set to ${val}%"
+        if(aVal==val){message = "$a level is ok"}
+        logging(message)
 
-    logging("${dimmers[i]} set to $val")
+        if(aVal != val)
+        {
+            dimmers[i].setLevel(val)
+            logging("${dimmers[i]} set to $val ---")
+        }
+
+    }
 }
 
 boolean stillActive()
@@ -409,23 +426,16 @@ log.info "last motion event occured at $state.lastMotionEventDate""")
 def resetMotionEvents()
 {
     log.info "No motion event has occured during the past $noMotionTime minutes"
-    //state.motionEvents = 0   
+    state.motionEvents = 0   
 }
 
-def logging(message)
+def logging(msg)
 {
-    state.enablelogging = enablelogging
-    if(state.enablelogging) 
-    {
-        state.scheduled = true
-        if(!state.scheduled){runIn(240, disablelogging)}
-        log.debug message
-    }
+    if (settings?.enablelogging || settings?.enablelogging == null) log.debug msg
 }
 
 def disablelogging()
 {
-    state.scheduled = false
-    state.enablelogging = false
+    app.updateSetting("enablelogging",[value:"false",type:"bool"])
     log.warn "logging disabled!"
 }
