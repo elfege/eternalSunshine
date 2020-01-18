@@ -147,7 +147,6 @@ def pageSetup() {
                             def timeoutValMode = []
                             for(timeoutModes.size() != 0; i < timeoutModes.size(); i++){
                                 input "timeoutValMode${i}", "number", required:true, title: "select a timeout value for ${timeoutModes[i]}"
-
                             }
                         }
                     }
@@ -406,7 +405,6 @@ def setDimmers(int val){
         a.on()
         if(aVal != val)
         {
-
             a.setLevel(val)
             logging("${dimmers[i]} set to $val ---")
         }
@@ -417,7 +415,7 @@ def setDimmers(int val){
 
 boolean stillActive()
 {
-    long timeout = getTimeout()
+    def timeout = getTimeout()
     long deltaMinutes = timeout * 1000 * 60   
     int s = motionSensors.size() 
     int i = 0
@@ -437,16 +435,23 @@ boolean stillActive()
 def getTimeout()
 {
     def result = noMotionTime // default
-    if(timeoutModes && location.mode in modes)
+    if(timeoutModes && location.mode in timeoutModes)
     {
         int s = timeoutModes.size()
         int i = 0
         logging("timeoutModes: $timeoutModes")
-        while(s < i && location.mode != timeoutModes[i]){i++}
-        def valMode = "timeoutValMode${i}" // set as max
+        while(i < s && location.mode != timeoutModes[i]){i++}
+        logging("${location.mode} == ${timeoutModes[i]} (timeoutModes${i} : index $i) ?: ${location.mode == timeoutModes[i]}")
+        def valMode = "timeoutValMode${i}" // we need the key as string to search its corresponding value within settings
+        logging("valMode = $valMode")
         result = settings.find{it.key == valMode}?.value
+        logging("valMode.value == $result")
     }
-    logging("timeout is: $result  ${if(modetimeout){"(mode related value)"}}")
+    if(result == null)
+    {
+        result = noMotionTime
+    }
+    logging("timeout is: $result  ${if(modetimeout){"because home in $valMode mode"}}")
     return result
 }
 
