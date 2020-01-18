@@ -227,7 +227,7 @@ def initialize() {
     subscribe(modes, "mode", locationModeChangeHandler)
     subscribe(sensor, "illuminance", illuminanceHandler)
 
-    //schedule("0 0/1 * * * ?", mainloop) 
+    schedule("0 0/1 * * * ?", mainloop) 
 
     logging("initialization ok")
     mainloop()
