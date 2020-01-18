@@ -33,10 +33,7 @@ def pageSetup() {
 
     if(state.paused)
     {
-        //app.updateLabel(app.label + ("<font color = 'red'> (Paused) </font>" ))
-
         log.debug "new app label: ${app.label}"
-
         while(app.label.contains(" (Paused) "))
         {
             app.updateLabel(app.label.minus("(Paused)" ))
@@ -139,6 +136,21 @@ def pageSetup() {
                 if(motionSensors)
                 {
                     input "noMotionTime", "number", title: "turn back off after how long?", required: true, description: "time in minutes"
+                    input "modetimeout", "bool", title: "Differentiate Timeouts With Location Mode", submitOnChange: true
+                    if(modetimeout)
+                    {
+                        input "timeoutModes", "mode", title:"select modes", required: true, multiple: true, submitOnChange: true
+
+                        if(timeoutModes){
+                            def i = 0
+                            state.timeoutValMode = []
+                            def timeoutValMode = []
+                            for(timeoutModes.size() != 0; i < timeoutModes.size(); i++){
+                                input "timeoutValMode${i}", "number", required:true, title: "select a timeout value for ${timeoutModes[i]}"
+
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -150,7 +162,7 @@ def pageSetup() {
         }
         section("logging")
         {
-            input("enablelogging", "bool", title:"Enable logging", value:false, submitOnChange: true)   
+            input"enablelogging", "bool", title:"Enable logging", value:false, submitOnChange:true
 
         }
     }
@@ -170,15 +182,22 @@ def updated() {
 }
 def initialize() {
 
-    if(enablelogging){runIn(1800, disablelogging)}
-    
+    if(enablelogging == true){
+        runIn(1800, disablelogging)
+        log.info "disablelogging scheduled to run in ${1800/60} minutes"
+    }
+    else 
+    {
+        log.warn "debug logging disabled!"
+    }
+
     state.motionEvents = 0
     state.lastMotionEvent = now() as long
         state.override = false
     state.lastDimVal = dimmers[0].currentValue("level")
-    
 
-        if(!state.maxValue)
+
+    if(!state.maxValue)
     {
         state.maxValue = 1000
         logging("state.maxValue reset to 1000 because it was null")
@@ -213,7 +232,6 @@ def initialize() {
     logging("initialization ok")
     mainloop()
 }
-
 def switchHandler(evt){
     logging("$evt.device is now set to $evt.value - - SOURCE: is $evt.source TYPE is $evt.type isPhysical: ${evt.isPhysical()}")
     state.lastEvent = evt.name
@@ -236,11 +254,13 @@ def illuminanceHandler(evt){
 }
 def motionHandler(evt){
 
+    log.info "$evt.device is $evt.value"
 
     if(evt.value == "active")
     {
         logging("motion active...")
         state.motionEvents += 1    
+        log.info("state.motionEvents = $state.motionEvents")
         state.lastMotionEventDate = new Date().format("h:mm a", location.timeZone)  // format just for debug purpose
 
         state.lastMotionEvent = now() as long // use raw long value
@@ -249,7 +269,6 @@ def motionHandler(evt){
     mainloop()
 
 }
-
 def appButtonHandler(btn) {
     switch(btn) {
         case "pause":state.paused = !state.paused
@@ -277,7 +296,6 @@ def appButtonHandler(btn) {
 
     }
 }
-
 def mainloop(){
 
     /**********************************************************************/
@@ -306,9 +324,7 @@ def mainloop(){
     }
 
 }
-
-def getDimVal()
-{
+def getDimVal(){
     def illum = sensor.currentValue("illuminance")
     if(sensor2){
         if(switchSensor2.currentValue("switch") == "switchState")
@@ -350,7 +366,6 @@ def getDimVal()
     logging("ALGEBRA RESULTS:  slope = $slope, b = $b, result = $dimVal | illuminance : ${illum} ${Unit}")
     return dimVal
 }
-
 def setDimmers(int val){
 
     if(val < 0)
@@ -383,55 +398,69 @@ def setDimmers(int val){
     {
         def a = dimmers[i]
         def aVal = dimmers[i].currentValue("level")
-        def message = "a is currently at ${aVal}% and needs to be set to ${val}%"
+        def message = "$a is currently at ${aVal}% and needs to be set to ${val}%"
+        logging(message)
         if(aVal==val){message = "$a level is ok"}
         logging(message)
 
+        a.on()
         if(aVal != val)
         {
-            dimmers[i].setLevel(val)
+
+            a.setLevel(val)
             logging("${dimmers[i]} set to $val ---")
         }
 
     }
 }
 
+
 boolean stillActive()
 {
+    long timeout = getTimeout()
+    long deltaMinutes = timeout * 1000 * 60   
+    int s = motionSensors.size() 
+    int i = 0
+    def thisDeviceEvents = []
+    int events = 0
 
-    boolean result = true // default is true  always return Active = true when no sensor is selected by the user
-
-
-    if(motionSensors)
-    {
-        long lastMotionEvent = state.lastMotionEvent as long
-            long timeElapsedSinceLastMotionEvent = now() - lastMotionEvent
-        long timeOutMillis = noMotionTime * 1000 * 60 
-        int minutes = lastMotionEvent/1000/60
-        logging("""lastMotionEvent < timeOutMillis  $lastMotionEvent < $timeOutMillis
-log.info "last motion event occured at $state.lastMotionEventDate""")
-
-        result = timeElapsedSinceLastMotionEvent < timeOutMillis
-
-    }
-    if(!result)
-    {
-        resetMotionEvents()
+    for(s != 0; (i < s && events == 0); i++) // if any of the sensors returns at least one event within the time threshold, then break this loop and return true
+    { 
+        thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
+        events += thisDeviceEvents.size() 
     }
 
-    log.info "motion returns $result with ${state.motionEvents} active motion events in the last $noMotionTime minutes"
+    log.info("$events active events in the last $timeout minutes stillActive() returns ${events>0}")
+    return events > 0
+}
+
+def getTimeout()
+{
+    def result = noMotionTime // default
+    if(timeoutModes && location.mode in modes)
+    {
+        int s = timeoutModes.size()
+        int i = 0
+        logging("timeoutModes: $timeoutModes")
+        while(s < i && location.mode != timeoutModes[i]){i++}
+        def valMode = "timeoutValMode${i}" // set as max
+        result = settings.find{it.key == valMode}?.value
+    }
+    logging("timeout is: $result  ${if(modetimeout){"(mode related value)"}}")
     return result
 }
 
 def resetMotionEvents()
 {
-    log.info "No motion event has occured during the past $noMotionTime minutes"
+    logging("No motion event has occured during the past $noMotionTime minutes")
     state.motionEvents = 0   
 }
 
 def logging(msg)
 {
-    if (settings?.enablelogging || settings?.enablelogging == null) log.debug msg
+    def debug = settings.find{it.key == "enablelogging"}?.value
+    //log.warn "debug = $debug"
+    if (debug) log.debug msg
 }
 
 def disablelogging()
