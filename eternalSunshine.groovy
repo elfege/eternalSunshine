@@ -258,8 +258,8 @@ def motionHandler(evt){
     if(evt.value == "active")
     {
         logging("motion active...")
-        state.motionEvents += 1    
-        log.info("state.motionEvents = $state.motionEvents")
+        //state.motionEvents += 1    
+        //log.info("state.motionEvents = $state.motionEvents")
         state.lastMotionEventDate = new Date().format("h:mm a", location.timeZone)  // format just for debug purpose
 
         state.lastMotionEvent = now() as long // use raw long value
@@ -415,20 +415,23 @@ def setDimmers(int val){
 
 boolean stillActive()
 {
-    def timeout = getTimeout()
-    long deltaMinutes = timeout * 1000 * 60   
-    int s = motionSensors.size() 
-    int i = 0
-    def thisDeviceEvents = []
     int events = 0
+    if(motionSensors)
+    {
+        def timeout = getTimeout()
+        long deltaMinutes = timeout * 1000 * 60   
+        int s = motionSensors.size() 
+        int i = 0
+        def thisDeviceEvents = []
 
-    for(s != 0; (i < s && events == 0); i++) // if any of the sensors returns at least one event within the time threshold, then break this loop and return true
-    { 
-        thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
-        events += thisDeviceEvents.size() 
+
+        for(s != 0; i < s; i++) // if any of the sensors returns at least one event within the time threshold, then return true
+        { 
+            thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
+            events += thisDeviceEvents.size() 
+        }
     }
-
-    log.info("$events active events in the last $timeout minutes stillActive() returns ${events>0}")
+    log.info("$events active motion events in the last $timeout minutes stillActive() returns ${events>0}")
     return events > 0
 }
 
