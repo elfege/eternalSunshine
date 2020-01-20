@@ -242,12 +242,14 @@ def locationModeChangeHandler(evt){
 }
 def dimmersHandler(evt){
     logging("$evt.device set to $evt.value, state.dimVal = $state.dimVal, evt.value == state.dimVal :? ${evt.value == state.dimVal} SOURCE: is $evt.source TYPE is $evt.type")
-
+    
+    
     //mainloop() // infinite feedback loop!
 }
 def illuminanceHandler(evt){
-    logging("$evt.device returns $evt.value")
-
+    logging("$evt.name is now $evt.value")
+    state.lux = evt.value
+    state.illumEvtTime = now() as long
     mainloop()
 
 }
@@ -324,7 +326,20 @@ def mainloop(){
 
 }
 def getDimVal(){
-    def illum = sensor.currentValue("illuminance")
+    def illum = 0 
+    if(state.lux != null && state.illumEvtTime < 10 * 60 * 1000)
+    {
+        illum = state.lux // always prefer event based values to prevent unecessary polls and, also, too many fluctuations
+    }
+    else 
+    {
+        illum = sensor.currentValue("illuminance")
+        state.lux = illum
+    }
+    //illum = sensor.currentValue("illuminance")
+    //log.info "illuminance sensor is: $sensor"
+    
+    log.info "illuminance is: $illum lux"
     if(sensor2){
         if(switchSensor2.currentValue("switch") == "switchState")
         {
