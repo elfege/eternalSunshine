@@ -430,6 +430,7 @@ def setDimmers(int val){
 
 boolean stillActive()
 {
+    boolean result = true
     int events = 0
     if(motionSensors)
     {
@@ -445,9 +446,10 @@ boolean stillActive()
             thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
             events += thisDeviceEvents.size() 
         }
+        result = events > 0
     }
     log.info("$events active motion events in the last $timeout minutes stillActive() returns ${events>0}")
-    return events > 0
+    return result
 }
 
 def getTimeout()
