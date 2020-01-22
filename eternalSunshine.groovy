@@ -440,7 +440,6 @@ boolean stillActive()
         int i = 0
         def thisDeviceEvents = []
 
-
         for(s != 0; i < s; i++) // if any of the sensors returns at least one event within the time threshold, then return true
         { 
             thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
@@ -448,7 +447,7 @@ boolean stillActive()
         }
         result = events > 0
     }
-    log.info("$events active motion events in the last $timeout minutes stillActive() returns ${events>0}")
+    log.info("$events active motion events in the last $timeout minutes stillActive() returns ${result}")
     return result
 }
 
