@@ -289,23 +289,30 @@ def appButtonHandler(btn) {
 }
 def mainloop(){
 
-    /**********************************************************************************************/
-    /***********runIn(30, mainloop) // DEBUG ONLY DON'T FORGET TO COMMENT OUT AFTER YOU'RE DONE*/
-    /**********************************************************************************************/
     boolean outofmodes = location.mode in restrictedModes   
     boolean Active = stillActive()
     boolean dimOff = dimmers.findAll{it.currentValue("level") == 0}.size() == dimmers.size() || dimmers.findAll{it.currentValue("switch") == "off"}.size() == dimmers.size() 
     boolean dimAreOff = false
-
-    logging("""
-dimmers.findAll{it.currentValue("level") == 0}.size() = ${dimmers.findAll{it.currentValue("level") == 0}.size()}
-dimmers.findAll{it.currentValue("switch") == "off"}.size() = ${dimmers.findAll{it.currentValue("switch") == "off"}.size()}
+     poll()
+       logging("""
+number of dimmers at level 0  = ${dimmers.findAll{it.currentValue("level") == 0}.size()}
+nmber of dimmers that are off = ${dimmers.findAll{it.currentValue("switch") == "off"}.size()}
 dimmers.size() = ${dimmers.size()}
 """)
+    // if we don't use motion, then dimAreOff is based on actual status (defined above), otherwise, it's false by default
+    // so to allow the app to continue managing the dimmers based on motion and illuminance
+    dimAreOff = usemotion ? false : dimOff 
+    logging("1: dimAreOff = $dimAreOff")
 
+    // now, if user has selected the override option, then the app will take the off status as override and not turn them back on
+    // whether or not usemotion is true (a bit redundant but necessary to avoid discrepancies). 
+    dimAreOff = (override && dimOff) ?  true : dimOff
+    logging("2: dimAreOff = $dimAreOff")
+
+ 
     logging("""
 usemotion = $usemotion
-dimAreOff = ${usemotion ? false : dimOff}
+dimAreOff = $dimAreOff
 dimOff = $dimOff
 outofmodes = $outofmodes
 override = $override ${usemotion ? "" : "(Redundant when not using motion)"}
@@ -323,23 +330,14 @@ restrictedModes = $restrictedModes
     }
     else
     {
-        // if we don't use motion, then dimAreOff is based on actual status (defined above), otherwise, it's false by default
-        // so to allow the app to continue managing the dimmers based on motion and illuminance
-        dimAreOff = usemotion ? false : dimOff 
-
-        // now, if user has selected the override option, then the app will take the off status as override and not turn them back on
-        // whether or not usemotion is true (a bit redundant but necessary to avoid discrepancies). 
-        dimAreOff = override ? dimOff : true
-
-
         if(Active && !pauseApp && !dimAreOff)
         {
             def dimVal = getDimVal()
             setDimmers(dimVal)
         }
-        else  if(!usemotion && dimAreOff)
+        else if(!usemotion && dimAreOff)
         {
-            log.info "dimmers are off and managed by another app, $app.label will resume when they're turned back on"
+            log.info "dimmers are off and managed by another app, $app.label will resume when they're turned back on dimAreOff = $dimAreOff"
         }
         else 
         {
@@ -364,9 +362,11 @@ def getDimVal(){
     //description("illuminance sensor is: $sensor")
 
     description("illuminance is: $illum lux")
+    logging("$switchSensor2 is ${switchSensor2.currentValue("switch")} -+-+--+-+--+-+--+-+--+-+--+-+--+-+-")
     if(sensor2){
         if(switchSensor2.currentValue("switch") == "switchState")
         {
+            log.warn "NOW USING $sensor2 AS ILLUMINANCE SOURCE"
             illum = sensor2.currentValue("illuminance")
         }
     }
@@ -532,3 +532,16 @@ def disablelogging()
     app.updateSetting("enablelogging",[value:"false",type:"bool"])
     log.warn "logging disabled!"
 }
+
+def poll()
+{
+    boolean haspoll = false
+    boolean hasrefresh = false
+    dimmers.each{
+        if(it.hasCommand("poll")){ it.poll() }else{logging("$it doesn't have poll command")}
+     if(it.hasCommand("refresh")){ it.refresh() }else{logging("$it doesn't have refresh command")}
+    }
+}
+    
+    
+    
