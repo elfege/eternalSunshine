@@ -74,13 +74,7 @@ def pageSetup() {
         }
         section("")
         {
-            //input "pause", "button", title: "$state.button_name"
-
             input "pause", "button", title: "$state.button_name"
-            paragraph " ", width: 6
-            input "update", "button", title: "UPDATE", width: 6
-            paragraph " ", width: 6
-            input "run", "button", title: "RUN", width: 6
         }
 
         section("Select the dimmers you wish to control") {
@@ -94,7 +88,7 @@ def pageSetup() {
                 input "idk", "bool", title:"I don't know the maximum illuminance value for this device", submitOnChange: true, defaultValue: false
                 if(!idk)
                 {
-                    input "maxValue", "decimal", title: "Select max lux value for this sensor", default: false, required:true, submitOnChange: true, defaultValue:defset
+                    input "maxValue", "number", title: "Select max lux value for this sensor", default: false, required:true, submitOnChange: true, defaultValue:defset
                 }
                 else 
                 {
@@ -153,6 +147,11 @@ def pageSetup() {
                 }
             }
         }
+        section("Other App Conflict Management")
+        {
+            input "otherApp", "bool", title: "These dimmers are turned off by another app", submitOnChange:true
+            paragraph "IMPORTANT: Enable this option if you know that these dimmers might be turned off by another app"
+        }
         section("modes")        {
             input "restrictedModes", "mode", title:"Pause this app if location is in one of these modes", required: false, multiple: true, submitOnChange: true 
         }
@@ -163,6 +162,11 @@ def pageSetup() {
         {
             input"enablelogging", "bool", title:"Enable logging", value:false, submitOnChange:true
             input"enabledescription", "bool", title:"Enable Description Text", value:false, submitOnChange:true
+        }
+        section("")
+        {
+            input "update", "button", title: "UPDATE"
+            input "run", "button", title: "RUN"
         }
     }
 }
@@ -181,7 +185,12 @@ def updated() {
 }
 def initialize() {
 
-    state.maxValue = maxValue
+    state.maxValue = 1000
+    if(!idk)
+    {
+        state.maxValue = maxValue
+    }
+
     if(enablelogging == true){
         runIn(1800, disablelogging)
         description("disablelogging scheduled to run in ${1800/60} minutes")
@@ -195,12 +204,6 @@ def initialize() {
     state.override = false
     state.lastDimVal = dimmers[0].currentValue("level")
 
-
-    if(!state.maxValue)
-    {
-        state.maxValue = 1000
-        logging("state.maxValue reset to 1000 because it was null")
-    }
 
     int i = 0
     int s = 0
@@ -232,6 +235,12 @@ def initialize() {
     mainloop()
 }
 def switchHandler(evt){
+
+    if(location.mode in restrictedModes)
+    {
+        logging("App paused due to modes restrictions")
+        return
+    }
     logging("$evt.device is now set to $evt.value - - SOURCE: is $evt.source TYPE is $evt.type isPhysical: ${evt.isPhysical()}")
     state.lastEvent = evt.name
     //mainloop() // infinite feedback loop!
@@ -241,19 +250,47 @@ def locationModeChangeHandler(evt){
     mainloop()
 }
 def dimmersHandler(evt){
-    logging("$evt.device set to $evt.value, state.dimVal = $state.dimVal, evt.value == state.dimVal :? ${evt.value == state.dimVal} SOURCE: is $evt.source TYPE is $evt.type")
 
+    if(location.mode in restrictedModes)
+    {
+        logging("App paused due to modes restrictions")
+        return
+    }
+    logging("$evt.device set to $evt.value, state.dimVal = $state.dimVal, evt.value == state.dimVal :? ${evt.value == state.dimVal} SOURCE: is $evt.source TYPE is $evt.type")
 
     //mainloop() // infinite feedback loop!
 }
 def illuminanceHandler(evt){
+
+    if(location.mode in restrictedModes)
+    {
+        logging("App paused due to modes restrictions")
+        return
+    }
     logging("$evt.name is now $evt.value")
-    state.lux = evt.value
-    state.illumEvtTime = now() as long
-        mainloop()
+
+    // learn max value if required
+    if(idk && illum.toInteger() > state.maxValue.toInteger())
+    {
+        state.maxValue = illum
+        logging("new maximum lux value registered as: $state.maxValue")
+    }
+    else 
+    {
+        logging "max value preset by user: ${maxValue}lux"
+        state.maxValue = maxValue
+    }
+
+    runIn(1,mainloop)
 
 }
 def motionHandler(evt){
+
+    if(location.mode in restrictedModes)
+    {
+        logging("App paused due to modes restrictions")
+        return
+    }
 
     description("$evt.device is $evt.value")
 
@@ -261,6 +298,12 @@ def motionHandler(evt){
 
 }
 def appButtonHandler(btn) {
+
+    if(location.mode in restrictedModes)
+    {
+        logging("App paused due to modes restrictions")
+        return
+    }
     switch(btn) {
         case "pause":state.paused = !state.paused
         log.debug "state.paused = $state.paused"
@@ -289,13 +332,17 @@ def appButtonHandler(btn) {
 }
 def mainloop(){
 
-    boolean outofmodes = location.mode in restrictedModes   
+
+    if(location.mode in restrictedModes)
+    {
+        logging("App paused due to modes restrictions")
+        return
+    }
     boolean Active = stillActive()
-    boolean dimOff = dimmers.findAll{it.currentValue("level") == 0}.size() == dimmers.size() || dimmers.findAll{it.currentValue("switch") == "off"}.size() == dimmers.size() 
+    boolean dimOff = dimmers.findAll{it.currentValue("switch") == "off"}.size() == dimmers.size() 
     boolean dimAreOff = false
-     poll()
-       logging("""
-number of dimmers at level 0  = ${dimmers.findAll{it.currentValue("level") == 0}.size()}
+    poll()
+    logging("""
 nmber of dimmers that are off = ${dimmers.findAll{it.currentValue("switch") == "off"}.size()}
 dimmers.size() = ${dimmers.size()}
 """)
@@ -306,10 +353,10 @@ dimmers.size() = ${dimmers.size()}
 
     // now, if user has selected the override option, then the app will take the off status as override and not turn them back on
     // whether or not usemotion is true (a bit redundant but necessary to avoid discrepancies). 
-    dimAreOff = (override && dimOff) ?  true : dimOff
+    dimAreOff = ((override && dimOff) || (dimOff && !usemotion)) ?  true : dimOff
     logging("2: dimAreOff = $dimAreOff")
 
- 
+
     logging("""
 usemotion = $usemotion
 dimAreOff = $dimAreOff
@@ -322,70 +369,34 @@ restrictedModes = $restrictedModes
 
 """)
 
-
-
-    if(outofmodes)
+    if(Active && !pauseApp && !dimAreOff)
     {
-        logging("App paused due to modes restrictions")
+        def dimVal = getDimVal()
+        setDimmers(dimVal)
     }
-    else
+    else if(!usemotion && dimAreOff)
     {
-        if(Active && !pauseApp && !dimAreOff)
-        {
-            def dimVal = getDimVal()
-            setDimmers(dimVal)
-        }
-        else if(!usemotion && dimAreOff)
-        {
-            log.info "dimmers are off and managed by another app, $app.label will resume when they're turned back on dimAreOff = $dimAreOff"
-        }
-        else 
-        {
-            logging("no motion...")
-            dimmers.off() 
-        }
+        log.info "dimmers are off and managed by another app, $app.label will resume when they're turned back on dimAreOff = $dimAreOff"
+    }
+    else 
+    {
+        logging("no motion...")
+        dimmers.off() 
     }
 
 }
 def getDimVal(){
-    def illum = 0 
-    if(state.lux != null && state.illumEvtTime < 10 * 60 * 1000)
-    {
-        illum = state.lux // always prefer event based values to prevent unecessary polls and, also, too many fluctuations
-    }
-    else 
-    {
-        illum = sensor.currentValue("illuminance")
-        state.lux = illum
-    }
-    //illum = sensor.currentValue("illuminance")
-    //description("illuminance sensor is: $sensor")
 
-    description("illuminance is: $illum lux")
-    logging("$switchSensor2 is ${switchSensor2.currentValue("switch")} -+-+--+-+--+-+--+-+--+-+--+-+--+-+-")
-    if(sensor2){
-        if(switchSensor2.currentValue("switch") == "switchState")
-        {
-            log.warn "NOW USING $sensor2 AS ILLUMINANCE SOURCE"
-            illum = sensor2.currentValue("illuminance")
-        }
-    }
+    def currentSensor = switchSensor2?.currentValue("switch") == "switchState" ? sensor2 : sensor
+    def illum = currentSensor.currentValue("illuminance")
 
-    //def latest = sensor.currentState("illuminance")
-    def Unit = "lux"//latest.getUnit()
+    logging """
+illuminance sensor is: $currentSensor
+illuminance is: $illum lux
 
+"""
+    def maxIllum = state.maxValue
 
-    if(!state.maxValue)
-    {
-        state.maxValue = 1000
-        logging("state.maxValue reset to 1000 because it was null")
-    }
-    // learn max value
-    if(illum.toInteger() > state.maxValue.toInteger())
-    {
-        state.maxValue = illum
-        logging("new maximum lux value registered as: $state.maxValue")
-    }
 
     def xa = 0    // min illuminance
     def ya = 100  // corresponding dimmer level
@@ -398,10 +409,12 @@ def getDimVal(){
     def b = ya - slope * xa // solution to ya = slope*xa + b //
 
     def dimVal = slope*illum + b
-
     dimVal = dimVal.toInteger()
 
-    logging("ALGEBRA RESULTS:  slope = $slope, b = $b, result = $dimVal | illuminance : ${illum} ${Unit}")
+    // if otherApp is true, then never completely turn off the dimmers so Eternal Sunshine knows when not to mess around
+    dimVal = otherApp ? dimVal < 1 ? dimVal = 1 : dimVal : dimVal < 0 ? dimVal = 0 : dimVal
+
+    logging("ALGEBRA RESULTS:  slope = $slope, b = $b, illuminance : ${illum} ${Unit} --> result = $dimVal ")
     return dimVal
 }
 def setDimmers(int val){
@@ -410,7 +423,6 @@ def setDimmers(int val){
     {
         val = 0
     }
-    def isNotOff = true
 
     def i = 0
     def s = dimmers.size()
@@ -539,9 +551,8 @@ def poll()
     boolean hasrefresh = false
     dimmers.each{
         if(it.hasCommand("poll")){ it.poll() }else{logging("$it doesn't have poll command")}
-     if(it.hasCommand("refresh")){ it.refresh() }else{logging("$it doesn't have refresh command")}
+        if(it.hasCommand("refresh")){ it.refresh() }else{logging("$it doesn't have refresh command")}
     }
 }
-    
-    
-    
+
+
