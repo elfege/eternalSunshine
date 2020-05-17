@@ -270,7 +270,7 @@ def illuminanceHandler(evt){
     logging("$evt.name is now $evt.value")
 
     // learn max value if required
-    def illum = currentSensor.currentValue("illuminance")
+    def illum = evt.value
     if(idk && illum.toInteger() > state.maxValue.toInteger())
     {
         state.maxValue = illum
