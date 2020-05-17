@@ -396,7 +396,7 @@ illuminance sensor is: $currentSensor
 illuminance is: $illum lux
 
 """
-    def maxIllum = state.maxValue
+    def maxIllum = (state.maxValue < 1000 || state.maxValue == null) ? 1000 : state.maxValue 
 
 
     def xa = 0    // min illuminance
