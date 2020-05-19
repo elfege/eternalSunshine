@@ -79,7 +79,21 @@ def pageSetup() {
 
         section("Select the dimmers you wish to control") {
             input "dimmers", "capability.switchLevel", title: "pick a dimmer", required:true, multiple: true
-            input "override", "bool", title: "Pause this app when all dimmers are off", defaultValue: false
+            input "override", "bool", title: "OVERRIDE ? (prevents conflicts with other motion lighting apps)", defaultValue: false, submitOnChange:true
+            if(override)
+            {
+                def message = "error"
+                if(usemotion)
+                {
+                    app.updateSetting("override",[value:"false",type:"bool"]) // fool proofing...
+                    message = "You cannot use the override option and motion sensors at the same time!"
+                }
+                else {
+                    message = "It is strongly advised not to use this app in parallel with any other motion lighting app controling the same dimmers. This option (OVERRIDE) may not work depending on your setup or even depending on the quality of your mesh network. If you see that your lights turn on/off constantly when there is no motion, please uninstall your motion lighting app, disable the override option and use the motion lighting built-in within this app for better compatibility. Thank you!"
+                }
+
+                paragraph "<div style=\"width:102%;background-color:#1C2BB7;color:red;padding:4px;font-weight: bold;box-shadow: 1px 2px 2px #bababa;margin-left: -10px\">${message}</div>"
+            }
         }
         section("Select Illuminance Sensor") {
             input "sensor", "capability.illuminanceMeasurement", title: "pick a sensor", required:true, multiple: false, submitOnChange: true
@@ -294,7 +308,7 @@ def motionHandler(evt){
         return
     }
 
-    description("$evt.device is $evt.value")
+    logging("MOTION ----- $evt.device is $evt.value")
 
     if(usemotion) mainloop()
 
@@ -341,11 +355,12 @@ def mainloop(){
         return
     }
     boolean Active = stillActive()
-    boolean dimOff = dimmers.findAll{it.currentValue("switch") == "off"}.size() == dimmers.size() 
+    boolean dimOff = dimmers.findAll{it.currentValue("switch") == "off"}.size() == dimmers.size()
     boolean dimAreOff = false
     poll()
     logging("""
-nmber of dimmers that are off = ${dimmers.findAll{it.currentValue("switch") == "off"}.size()}
+number of dimmers that are off = ${dimmers.findAll{it.currentValue("switch") == "off"}.size()}
+number of dimmers that are set to 0 = ${dimmers.findAll{it.currentValue("level") == 0}.size()}
 dimmers.size() = ${dimmers.size()}
 """)
     // if we don't use motion, then dimAreOff is based on actual status (defined above), otherwise, it's false by default
@@ -355,8 +370,14 @@ dimmers.size() = ${dimmers.size()}
 
     // now, if user has selected the override option, then the app will take the off status as override and not turn them back on
     // whether or not usemotion is true (a bit redundant but necessary to avoid discrepancies). 
-    dimAreOff = ((override && dimOff) || (dimOff && !usemotion)) ?  true : dimOff
-    logging("2: dimAreOff = $dimAreOff")
+    dimAreOff = (override && dimOff && !usemotion) ? true : (usemotion ? false : dimOff)
+    if(override && usemotion)
+    {
+        app.updateSetting("override",[value:"false",type:"bool"]) // fool proofing... 
+    }
+    logging("""2: dimAreOff = $dimAreOff
+usemotion = $usemotion
+""")
 
 
     logging("""
@@ -471,29 +492,27 @@ boolean stillActive()
     boolean result = true
     int events = 0
     boolean pauseApp = false
+    def timeout = 1//getTimeout()
+    long deltaMinutes = timeout * 1000 * 60   
+    int s = motionSensors.size() 
+    int i = 0
 
     if(usemotion)
     {
-        def timeout = getTimeout()
-        long deltaMinutes = timeout * 1000 * 60   
-        int s = motionSensors.size() 
-        int i = 0
-        def DeviceEvents = []
+        boolean AnyCurrentlyActive = motionSensors.findAll{it.currentValue("motion") == "active"}?.size() != 0
+        if(AnyCurrentlyActive) return true  // for faster execution when true
 
 
-        DeviceEvents = motionSensors.findAll{it.eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"}} // collect motion events for each sensor separately
-        //description("$DeviceEvents ")
-        events = DeviceEvents.size()
+        // if not triggered by motion event, then look for past events of each sensor
+        for(s != 0; i < s; i++) // collect active events
+        { 
+            events += motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"}?.size() // collect motion events for each sensor separately
+        }
 
-        /*
-for(s != 0; i < s; i++) // if any of the sensors returns at least one event within the time threshold, then return true
-{ 
-thisDeviceEvents = motionSensors[i].eventsSince(new Date(now() - deltaMinutes)).findAll{it.value == "active"} // collect motion events for each sensor separately
-events += thisDeviceEvents.size() 
-}*/
-        result = events > 0
+        result = events > 0 
     }
-    description("$events active motion events in the last $timeout minutes stillActive() returns ${result}")
+    //log.warn("********* $events active motion events in the last $timeout minutes stillActive() returns ${result} ************")
+    description "motion $result"
     return result
 }
 
