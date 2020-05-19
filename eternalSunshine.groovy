@@ -492,7 +492,7 @@ boolean stillActive()
     boolean result = true
     int events = 0
     boolean pauseApp = false
-    def timeout = 1//getTimeout()
+    def timeout = getTimeout()
     long deltaMinutes = timeout * 1000 * 60   
     int s = motionSensors.size() 
     int i = 0
