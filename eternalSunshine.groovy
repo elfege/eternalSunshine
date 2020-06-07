@@ -297,7 +297,7 @@ def illuminanceHandler(evt){
         state.maxValue = maxValue
     }
 
-    runIn(1,mainloop)
+    mainloop()
 
 }
 def motionHandler(evt){
@@ -357,7 +357,7 @@ def mainloop(){
     boolean Active = stillActive()
     boolean dimOff = dimmers.findAll{it.currentValue("switch") == "off"}.size() == dimmers.size()
     boolean dimAreOff = false
-    poll()
+
     logging("""
 number of dimmers that are off = ${dimmers.findAll{it.currentValue("switch") == "off"}.size()}
 number of dimmers that are set to 0 = ${dimmers.findAll{it.currentValue("level") == 0}.size()}
@@ -392,7 +392,7 @@ restrictedModes = $restrictedModes
 
 """)
 
-    if(Active && !pauseApp && !dimAreOff)
+    if(Active && !dimAreOff)
     {
         def dimVal = getDimVal()
         setDimmers(dimVal)
@@ -486,21 +486,23 @@ def setDimmers(int val){
     }
 }
 
-
-boolean stillActive()
-{
+boolean stillActive(){
     boolean result = true
-    int events = 0
-    boolean pauseApp = false
-    def timeout = getTimeout()
-    long deltaMinutes = timeout * 1000 * 60   
-    int s = motionSensors.size() 
-    int i = 0
 
     if(usemotion)
     {
+        int events = 0
+        def timeout = getTimeout()
+        long deltaMinutes = timeout * 1000 * 60   
+        int s = motionSensors.size() 
+        int i = 0
+
         boolean AnyCurrentlyActive = motionSensors.findAll{it.currentValue("motion") == "active"}?.size() != 0
-        if(AnyCurrentlyActive) return true  // for faster execution when true
+        if(AnyCurrentlyActive) 
+        {
+            description("return true")
+            return true  // for faster execution when true
+        }
 
 
         // if not triggered by motion event, then look for past events of each sensor
@@ -511,23 +513,23 @@ boolean stillActive()
 
         result = events > 0 
     }
-    //log.warn("********* $events active motion events in the last $timeout minutes stillActive() returns ${result} ************")
+    //logwarn("********* $events active motion events in the last $timeout minutes stillActive() returns ${result} ************")
     description "motion $result"
     return result
 }
 
-def getTimeout()
-{
+def getTimeout(){
     def result = noMotionTime // default
-    valMode = location.mode
-    if(timeoutModes && location.mode in timeoutModes)
+    def valMode = location.mode
+    
+    if(modetimeout && location.mode in timeoutModes)
     {
         int s = timeoutModes.size()
         int i = 0
         logging("timeoutModes: $timeoutModes")
         while(i < s && location.mode != timeoutModes[i]){i++}
         logging("${location.mode} == ${timeoutModes[i]} (timeoutModes${i} : index $i) ?: ${location.mode == timeoutModes[i]}")
-        valMode = "timeoutValMode${i}" // we need the key as string to search its corresponding value within settings
+        valMode = "timeoutValMode${i}" // get the key as string to search its corresponding value within settings
         logging("valMode = $valMode")
         result = settings.find{it.key == valMode}?.value
         logging("valMode.value == $result")
@@ -539,35 +541,30 @@ def getTimeout()
     logging("timeout is: $result  ${if(modetimeout){"because home in $location.mode mode"}}")
     return result
 }
-
-def resetMotionEvents()
-{
+def resetMotionEvents(){
     logging("No motion event has occured during the past $noMotionTime minutes")
     state.motionEvents = 0   
 }
-
-def logging(msg)
-{
+def logging(msg){
     def debug = settings.find{it.key == "enablelogging"}?.value
     //log.warn "debug = $debug"
     if (debug) log.debug msg
 }
-
-def description(msg)
-{
+def description(msg){
     def debug = settings.find{it.key == "enablelogging"}?.value
     //log.warn "debug = $debug"
     if (enabledescription) log.info msg
 }
+def logwarn(msg){
+    log.warn msg
+}
 
-def disablelogging()
-{
+def disablelogging(){
     app.updateSetting("enablelogging",[value:"false",type:"bool"])
     log.warn "logging disabled!"
 }
 
-def poll()
-{
+def poll(){
     boolean haspoll = false
     boolean hasrefresh = false
     dimmers.each{
