@@ -1,17 +1,17 @@
 /*
 *  Copyright 2016 elfege
 *
-*    Software distributed under the License is distributed on an "AS IS" BASIS, 
-*    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
-*    for the specific language governing permissions and limitations under the License.
+*    Eternal Sunshine©: Adjust dimmers with illuminance and (optional) motion
 *
-*    Eternal Sunshine: Adjust dimmers with illuminance and (optional) motion
+*    Software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
+*    
+*    The name Eternal Sunshine as an illuminance management software is protected under copyright
 *
 *  Author: Elfege
 */
 
 definition(
-    name: "Eternal Sunshine",
+    name: "Eternal Sunshine©",
     namespace: "elfege",
     author: "elfege",
     description: "Adjust dimmers with illuminance",
