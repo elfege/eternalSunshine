@@ -28,7 +28,6 @@ preferences {
     page name:"Options"
 
 }
-
 def pageSetup() {
 
     if(state.paused)
@@ -107,7 +106,7 @@ def pageSetup() {
                 else 
                 {
                     paragraph "It will take up to 72 hours for the app to learn the maxium illuminance value this device can return, but it will start working immediately based on a preset value"
-                    state.maxValue = 1000
+                    state.maxValue = 1000 // temporary value
                 }
                 logging( "maxValue = $state.maxValue")
 
@@ -184,9 +183,6 @@ def pageSetup() {
         }
     }
 }
-
-
-
 def installed() {
     logging("Installed with settings: ${settings}")
     initialize()
@@ -270,9 +266,9 @@ def dimmersHandler(evt){
         logging("App paused due to modes restrictions")
         return
     }
-    logging("$evt.device set to $evt.value, state.dimVal = $state.dimVal, evt.value == state.dimVal :? ${evt.value == state.dimVal} SOURCE: is $evt.source TYPE is $evt.type")
+    logging("$evt.device set to $evt.value")
 
-    //mainloop() // infinite feedback loop!
+    //mainloop() // infinite feedback loop if triggered from here...
 }
 def illuminanceHandler(evt){
 
@@ -416,17 +412,17 @@ def getDimVal(){
     logging """
 illuminance sensor is: $currentSensor
 illuminance is: $illum lux
-
+maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.maxValue = $state.maxValue (learned value)"}
 """
-    def maxIllum = (state.maxValue < 1000 || state.maxValue == null) ? 1000 : state.maxValue 
-
+    def maxIllum = idk ? state.maxValue : maxValue  // if idk selected, then use last learned max value (state.maxValue)
+    
 
     def xa = 0    // min illuminance
     def ya = 100  // corresponding dimmer level
-    def xb = state.maxValue.toInteger()   // max illuminance
+    def xb = maxIllum  // max illuminance
     def yb = 0    // corresponding dimmer level
 
-    logging("xa = $xa,ya = $ya, xb = $xb, yb = $yb, maxValue = $maxValue, state.maxValue = $state.maxValue")
+    logging "xa = $xa,ya = $ya, xb = $xb, yb = $yb, maxIllum = $maxIllum | ${maxValue ? "(user defined maxValue = $maxValue)" : ""}"
 
     def slope = (yb-ya)/(xb-xa)  // slope
     def b = ya - slope * xa // solution to ya = slope*xa + b //
@@ -435,9 +431,9 @@ illuminance is: $illum lux
     dimVal = dimVal.toInteger()
 
     // if otherApp is true, then never completely turn off the dimmers so Eternal Sunshine knows when not to mess around
-    dimVal = otherApp ? dimVal < 1 ? dimVal = 1 : dimVal : dimVal < 0 ? dimVal = 0 : dimVal
+    dimVal = otherApp ? (dimVal < 1 ? dimVal = 1 : dimVal) : (dimVal < 0 ? dimVal = 0 : dimVal)
 
-    logging("ALGEBRA RESULTS:  slope = $slope, b = $b, illuminance : ${illum} ${Unit} --> result = $dimVal ")
+    logging("ALGEBRA RESULTS:  slope = $slope, b = $b, illuminance : ${illum} --> result = $dimVal ")
     return dimVal
 }
 def setDimmers(int val){
