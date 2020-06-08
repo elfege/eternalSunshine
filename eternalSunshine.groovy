@@ -171,6 +171,10 @@ def pageSetup() {
         section() {
             label title: "Assign a name", required: false
         }
+        section("")
+        {
+            input"square", "bool", title:"Use logarithmic variations (beta)", value:false
+        }
         section("logging")
         {
             input"enablelogging", "bool", title:"Enable logging", value:false, submitOnChange:true
@@ -390,7 +394,7 @@ restrictedModes = $restrictedModes
 
     if(Active && !dimAreOff)
     {
-        def dimVal = getDimVal()
+        def dimVal = square ? getDimValLog() : getDimVal()
         setDimmers(dimVal)
     }
     else if(!usemotion && dimAreOff)
@@ -404,6 +408,7 @@ restrictedModes = $restrictedModes
     }
 
 }
+
 def getDimVal(){
 
     def currentSensor = switchSensor2?.currentValue("switch") == "switchState" ? sensor2 : sensor
@@ -415,27 +420,76 @@ illuminance is: $illum lux
 maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.maxValue = $state.maxValue (learned value)"}
 """
     def maxIllum = idk ? state.maxValue : maxValue  // if idk selected, then use last learned max value (state.maxValue)
-    
 
-    def xa = 0    // min illuminance
-    def ya = 100  // corresponding dimmer level
-    def xb = maxIllum  // max illuminance
-    def yb = 0    // corresponding dimmer level
 
-    logging "xa = $xa,ya = $ya, xb = $xb, yb = $yb, maxIllum = $maxIllum | ${maxValue ? "(user defined maxValue = $maxValue)" : ""}"
+    def y = null // value to find
+    def x = illum // current illuminance
+    def xa = maxIllum // maximum dimming value
+    def ya = 0      //coressponding dimming value for when illuminance = xa
 
-    def slope = (yb-ya)/(xb-xa)  // slope
-    def b = ya - slope * xa // solution to ya = slope*xa + b //
+    def m = -0.1 // multiplier/slope 
 
-    def dimVal = slope*illum + b
-    dimVal = dimVal.toInteger()
-
-    // if otherApp is true, then never completely turn off the dimmers so Eternal Sunshine knows when not to mess around
+    y = m*(x-xa)+ya // solving y-ya = m*(x-xa)
+    //logging "algebra found y = $y"
+    dimVal = y.toInteger()
     dimVal = otherApp ? (dimVal < 1 ? dimVal = 1 : dimVal) : (dimVal < 0 ? dimVal = 0 : dimVal)
+    dimVal = dimVal > 100 ? 100 : dimVal // useless due to slope being -0.1 but just in case I forget about the slope's value function, I leave this line and its comment here
 
-    logging("ALGEBRA RESULTS:  slope = $slope, b = $b, illuminance : ${illum} --> result = $dimVal ")
-    return dimVal
+    logging """illuminance: $illum, maximum illuminance: $maxIllum -|- ${maxValue ? "(user defined maxValue = $maxValue)" : ""}
+
+linear dimming value result = ${dimVal} 
+"""
+    return dimVal.toInteger()
 }
+def getDimValLog(){ // exponential calculation
+
+    def currentSensor = switchSensor2?.currentValue("switch") == "switchState" ? sensor2 : sensor
+    def illum = currentSensor.currentValue("illuminance")
+
+    logging """
+illuminance sensor is: $currentSensor
+illuminance is: $illum lux
+maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.maxValue = $state.maxValue (learned value)"}
+"""
+    def maxIllum = idk ? state.maxValue : maxValue  // if idk selected, then use last learned max value (state.maxValue)
+
+
+    def y = null // value to find
+    def x = illum // current illuminance
+ 
+    def m = getMultiplier(maxIllum) // multiplier; must vary with max illuminance
+    def a = 300
+
+    y = Math.log10(1/x)*m+a
+    logging "LOGARITHMIC algebra found y = $y  Math.log(10) = ${Math.log(10)}"
+    dimVal = y.toInteger()
+    dimVal = otherApp ? (dimVal < 1 ? dimVal = 1 : dimVal) : (dimVal < 0 ? dimVal = 0 : dimVal)
+    dimVal = dimVal > 100 ? 100 : dimVal 
+
+    logging """illuminance: $illum, maximum illuminance: $maxIllum -|- ${maxValue ? "(user defined maxValue = $maxValue)" : ""}
+
+LOGARITHMIC dimming value = ${dimVal} 
+"""
+    return dimVal.toInteger()
+}
+def getMultiplier(maxIllum){ // define multiplier in square function with max illuminance level (changes the curve itself)
+    
+    def y = null // value to find
+    def x = maxIllum // current MAX illuminance
+    def xa = 1000 // minimal multiplier value 
+    def ya = 100      //coressponding required multiplier value for when x = xa
+
+    def slope = 0.08 // multiplier/slope 
+
+    y = slope*(x-xa)+ya // solving y-ya = slope*(x-xa)
+    
+    def result = y.toInteger()
+    
+    logging "linear multiplier value = ${result} (xa = $xa ya = $ya x = $x)"
+    return result.toInteger()
+
+}
+
 def setDimmers(int val){
 
     if(val < 0)
@@ -517,7 +571,7 @@ boolean stillActive(){
 def getTimeout(){
     def result = noMotionTime // default
     def valMode = location.mode
-    
+
     if(modetimeout && location.mode in timeoutModes)
     {
         int s = timeoutModes.size()
