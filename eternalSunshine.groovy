@@ -106,7 +106,7 @@ def pageSetup() {
                 else 
                 {
                     paragraph "It will take up to 72 hours for the app to learn the maxium illuminance value this device can return, but it will start working immediately based on a preset value"
-                    state.maxValue = 1000 // temporary value
+                    state.maxValue = state.maxValue == null ? 1000 : state.maxValue // temporary value
                 }
                 logging( "maxValue = $state.maxValue")
 
