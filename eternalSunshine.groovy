@@ -101,7 +101,7 @@ def pageSetup() {
                 input "idk", "bool", title:"I don't know the maximum illuminance value for this device", submitOnChange: true, defaultValue: false
                 if(!idk)
                 {
-                    input "maxValue", "number", title: "Select max lux value for this sensor", default: false, required:true, submitOnChange: true, defaultValue:defset
+                    input "maxValue", "number", title: "Select max lux value for this sensor", default: false, required:true, submitOnChange: true
                 }
                 else 
                 {
@@ -348,7 +348,6 @@ def appButtonHandler(btn) {
 }
 def mainloop(){
 
-
     if(location.mode in restrictedModes)
     {
         logging("App paused due to modes restrictions")
@@ -459,9 +458,10 @@ maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.m
  
     def m = getMultiplier(maxIllum) // multiplier; must vary with max illuminance
     def a = 300
+    def base = 4
 
-    y = Math.log10(1/x)*m+a
-    logging "LOGARITHMIC algebra found y = $y  Math.log(10) = ${Math.log(10)}"
+    y = (Math.log10(1/x)/Math.log10(base))*m+a
+    logging "LOGARITHMIC algebra found y = $y"
     dimVal = y.toInteger()
     dimVal = otherApp ? (dimVal < 1 ? dimVal = 1 : dimVal) : (dimVal < 0 ? dimVal = 0 : dimVal)
     dimVal = dimVal > 100 ? 100 : dimVal 
@@ -477,7 +477,7 @@ def getMultiplier(maxIllum){ // define multiplier in square function with max il
     def y = null // value to find
     def x = maxIllum // current MAX illuminance
     def xa = 1000 // minimal multiplier value 
-    def ya = 100      //coressponding required multiplier value for when x = xa
+    def ya = 60      //coressponding required multiplier value for when x = xa
 
     def slope = 0.08 // multiplier/slope 
 
