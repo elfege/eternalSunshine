@@ -176,12 +176,24 @@ def pageSetup() {
             input"logarithm", "bool", title:"Use logarithmic variations (beta)", value:false, submitOnChange:true
             if(logarithm)
             {
-                
-                input "sensitivity", "number",/* range: "3..10",*/ required:true, title: "Set a sensitivity value", description:"value must be between 3 and 10", submitOnChange:true
-                paragraph "The higher the value, the faster your lights will dim down as luminance goes up"
-                state.sensitivity = sensitivity // serves as xa basis in linear determination of log() function's multiplier
-                state.sensitivity = state.sensitivity != null ? state.sensitivity * 10 : 70
-                log.info "state.sensitivity = $state.sensitivity"
+
+                input "sensitivity", "decimal", range: "3.0..10.0", required:true, title: "Set a sensitivity value", description:"DECIMAL between 3.0 and 10.0", submitOnChange:true // serves as xa basis in linear determination of log() function's multiplier
+                paragraph "The higher the value, the more luminance will be needed for $app.name to turn off your lights"
+                 
+                if(sensitivity)
+                {
+                    boolean wrong = sensitivity > 10.0 || sensitivity < 3.0
+                    def message = "${wrong ? "WARNING WRONG VALUE PLEASE SET A VALUE BETWEEN 3 and 10!" : "sensitivity set to: $sensitivity"}"
+
+                    if(wrong) {
+                        paragraph "<div style=\"width:102%;background-color:red;color:black;padding:4px;font-weight: bold;box-shadow: 10px 10px 10px #141414;margin-left: -10px\">${message}</div>"
+                        log.warn message
+                    }
+                    else 
+                    {
+                        log.debug message
+                    }
+                }
             }
         }
         section("logging")
@@ -466,10 +478,10 @@ maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.m
 
     def y = null // value to find
     def x = illum != 0 ? illum : 1 // current illuminance // prevent "ava.lang.ArithmeticException: Division by zero "
- 
+
     def m = getMultiplier(maxIllum) // multiplier; must vary with max illuminance
     def a = 300
-    def base = 5
+    def base = sensitivity // this value is the overall sensitivity set by the user
 
     y = (Math.log10(1/x)/Math.log10(base))*m+a
     logging "LOGARITHMIC algebra found y = $y with $m as multiplier"
@@ -484,29 +496,24 @@ LOGARITHMIC dimming value = ${dimVal}
     return dimVal.toInteger()
 }
 def getMultiplier(maxIllum){ // define multiplier in logarithmic function with max illuminance level (changes the curve itself)
-    
+
     def y = null // value to find
     def x = maxIllum // current MAX illuminance
     def xa = 1000 // minimal multiplier value 
-    def ya = state.sensitivity.toInteger()  //coressponding required multiplier value for when x = xa // this value sets the overall sensitivity 
+    def ya = 70 //coressponding required multiplier value for when x = xa 
 
     def slope = -0.008 // multiplier/slope 
 
     y = slope*(x-xa)+ya // solving y-ya = slope*(x-xa)
-    
+
     def result = y.toInteger()
-    
+
     logging "linear multiplier slope = $slope x = $x | y = ${result}"
     return result.toInteger()
 
 }
 
 def setDimmers(int val){
-
-    if(val < 0)
-    {
-        val = 0
-    }
 
     def i = 0
     def s = dimmers.size()
@@ -527,24 +534,10 @@ def setDimmers(int val){
         }
     }
 
-    i = 0
-    for(s!=0;i<s;i++)
-    {
-        def a = dimmers[i]
-        def aVal = dimmers[i].currentValue("level")
-        def message = "$a is currently at ${aVal}% and needs to be set to ${val}%"
-        logging(message)
-        if(aVal==val){message = "$a level is ok"}
-        logging(message)
-
-        //a.on()
-        //if(aVal != val)
-        //{
-            a.setLevel(val)
-            logging("${dimmers[i]} set to $val ---")
-        //}
-
-    }
+    val = val < 0 ? 0 : (val > 100 ? 100 : val) // just a precaution
+  
+    dimmers.setLevel(val)
+    logging("${dimmers} set to $val ---")
 }
 
 boolean stillActive(){
@@ -635,4 +628,21 @@ def poll(){
     }
 }
 
+/*i = 0
+    for(s!=0;i<s;i++)
+    {
+        def a = dimmers[i]
+        def aVal = dimmers[i].currentValue("level")
+        def message = "$a is currently at ${aVal}% and needs to be set to ${val}%"
+        logging(message)
+        if(aVal==val){message = "$a level is ok"}
+        logging(message)
 
+        //a.on()
+        //if(aVal != val)
+        //{
+        a.setLevel(val)
+        logging("${dimmers[i]} set to $val ---")
+        //}
+
+    }*/
