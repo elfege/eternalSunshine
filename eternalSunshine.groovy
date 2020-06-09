@@ -452,9 +452,8 @@ maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.m
 """
     def maxIllum = idk ? state.maxValue : maxValue  // if idk selected, then use last learned max value (state.maxValue)
 
-
     def y = null // value to find
-    def x = illum // current illuminance
+    def x = illum != 0 ? illum : 1 // current illuminance // prevent "ava.lang.ArithmeticException: Division by zero "
  
     def m = getMultiplier(maxIllum) // multiplier; must vary with max illuminance
     def a = 300
