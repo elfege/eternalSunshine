@@ -178,7 +178,7 @@ def pageSetup() {
             {
 
                 input "sensitivity", "decimal", range: "3.0..10.0", required:true, title: "Set a sensitivity value", description:"DECIMAL between 3.0 and 10.0", submitOnChange:true // serves as xa basis in linear determination of log() function's multiplier
-                paragraph "The higher the value, the more luminance will be needed for $app.name to turn off your lights"
+                paragraph "The higher the value, the more luminance will be needed for $app.name to turn off your lights. For a maximum illuminance of 1000 (max value for most indoor sensors), a value between 5.0 and 6.0 is recommended"
                  
                 if(sensitivity)
                 {
@@ -472,14 +472,12 @@ def getDimValLog(){ // exponential calculation
 LOG
 illuminance sensor is: $currentSensor
 illuminance is: $illum lux 
-maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.maxValue = $state.maxValue (learned value)"}
+No max value in logarithmic mode..
 """
-    def maxIllum = idk ? state.maxValue : maxValue  // if idk selected, then use last learned max value (state.maxValue)
-
     def y = null // value to find
     def x = illum != 0 ? illum : 1 // current illuminance // prevent "ava.lang.ArithmeticException: Division by zero "
 
-    def m = getMultiplier(maxIllum) // multiplier; must vary with max illuminance
+    def m = 70 // DEPRECATED: getMultiplier(maxIllum) // multiplier; must vary with max illuminance
     def a = 300
     def base = sensitivity // this value is the overall sensitivity set by the user
 
@@ -489,30 +487,12 @@ maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.m
     dimVal = otherApp ? (dimVal < 1 ? dimVal = 1 : dimVal) : (dimVal < 0 ? dimVal = 0 : dimVal)
     dimVal = dimVal > 100 ? 100 : dimVal 
 
-    logging """illuminance: $illum, maximum illuminance: $maxIllum -|- ${maxValue ? "(user defined maxIllum = $maxIllum)" : ""}
+    logging """illuminance: $illum, -|- sensitivity: $sensitivity -|- ${maxValue ? "(user defined maxIllum = $maxIllum)" : ""}
 
 LOGARITHMIC dimming value = ${dimVal} 
 """
-    return dimVal.toInteger()
+    return dimVal
 }
-def getMultiplier(maxIllum){ // define multiplier in logarithmic function with max illuminance level (changes the curve itself)
-
-    def y = null // value to find
-    def x = maxIllum // current MAX illuminance
-    def xa = 1000 // minimal multiplier value 
-    def ya = 70 //coressponding required multiplier value for when x = xa 
-
-    def slope = -0.008 // multiplier/slope 
-
-    y = slope*(x-xa)+ya // solving y-ya = slope*(x-xa)
-
-    def result = y.toInteger()
-
-    logging "linear multiplier slope = $slope x = $x | y = ${result}"
-    return result.toInteger()
-
-}
-
 def setDimmers(int val){
 
     def i = 0
@@ -539,7 +519,6 @@ def setDimmers(int val){
     dimmers.setLevel(val)
     logging("${dimmers} set to $val ---")
 }
-
 boolean stillActive(){
     boolean result = true
 
