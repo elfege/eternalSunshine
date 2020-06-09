@@ -173,7 +173,16 @@ def pageSetup() {
         }
         section("")
         {
-            input"square", "bool", title:"Use logarithmic variations (beta)", value:false
+            input"logarithm", "bool", title:"Use logarithmic variations (beta)", value:false, submitOnChange:true
+            if(logarithm)
+            {
+                
+                input "sensitivity", "number",/* range: "3..10",*/ required:true, title: "Set a sensitivity value", description:"value must be between 3 and 10", submitOnChange:true
+                paragraph "The higher the value, the faster your lights will dim down as luminance goes up"
+                state.sensitivity = sensitivity // serves as xa basis in linear determination of log() function's multiplier
+                state.sensitivity = state.sensitivity != null ? state.sensitivity * 10 : 70
+                log.info "state.sensitivity = $state.sensitivity"
+            }
         }
         section("logging")
         {
@@ -244,6 +253,7 @@ def initialize() {
     subscribe(sensor, "illuminance", illuminanceHandler)
 
     schedule("0 0/1 * * * ?", mainloop) 
+    schedule("0 0/1 * * * ?", poll) 
 
     logging("initialization ok")
     mainloop()
@@ -270,7 +280,7 @@ def dimmersHandler(evt){
         logging("App paused due to modes restrictions")
         return
     }
-    logging("$evt.device set to $evt.value")
+    logging("** $evt.device set to $evt.value **")
 
     //mainloop() // infinite feedback loop if triggered from here...
 }
@@ -393,7 +403,7 @@ restrictedModes = $restrictedModes
 
     if(Active && !dimAreOff)
     {
-        def dimVal = square ? getDimValLog() : getDimVal()
+        def dimVal = logarithm ? getDimValLog() : getDimVal()
         setDimmers(dimVal)
     }
     else if(!usemotion && dimAreOff)
@@ -414,6 +424,7 @@ def getDimVal(){
     def illum = currentSensor.currentValue("illuminance")
 
     logging """
+LIN
 illuminance sensor is: $currentSensor
 illuminance is: $illum lux
 maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.maxValue = $state.maxValue (learned value)"}
@@ -446,8 +457,9 @@ def getDimValLog(){ // exponential calculation
     def illum = currentSensor.currentValue("illuminance")
 
     logging """
+LOG
 illuminance sensor is: $currentSensor
-illuminance is: $illum lux
+illuminance is: $illum lux 
 maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.maxValue = $state.maxValue (learned value)"}
 """
     def maxIllum = idk ? state.maxValue : maxValue  // if idk selected, then use last learned max value (state.maxValue)
@@ -457,34 +469,34 @@ maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.m
  
     def m = getMultiplier(maxIllum) // multiplier; must vary with max illuminance
     def a = 300
-    def base = 4
+    def base = 5
 
     y = (Math.log10(1/x)/Math.log10(base))*m+a
-    logging "LOGARITHMIC algebra found y = $y"
+    logging "LOGARITHMIC algebra found y = $y with $m as multiplier"
     dimVal = y.toInteger()
     dimVal = otherApp ? (dimVal < 1 ? dimVal = 1 : dimVal) : (dimVal < 0 ? dimVal = 0 : dimVal)
     dimVal = dimVal > 100 ? 100 : dimVal 
 
-    logging """illuminance: $illum, maximum illuminance: $maxIllum -|- ${maxValue ? "(user defined maxValue = $maxValue)" : ""}
+    logging """illuminance: $illum, maximum illuminance: $maxIllum -|- ${maxValue ? "(user defined maxIllum = $maxIllum)" : ""}
 
 LOGARITHMIC dimming value = ${dimVal} 
 """
     return dimVal.toInteger()
 }
-def getMultiplier(maxIllum){ // define multiplier in square function with max illuminance level (changes the curve itself)
+def getMultiplier(maxIllum){ // define multiplier in logarithmic function with max illuminance level (changes the curve itself)
     
     def y = null // value to find
     def x = maxIllum // current MAX illuminance
     def xa = 1000 // minimal multiplier value 
-    def ya = 60      //coressponding required multiplier value for when x = xa
+    def ya = state.sensitivity.toInteger()  //coressponding required multiplier value for when x = xa // this value sets the overall sensitivity 
 
-    def slope = 0.08 // multiplier/slope 
+    def slope = -0.008 // multiplier/slope 
 
     y = slope*(x-xa)+ya // solving y-ya = slope*(x-xa)
     
     def result = y.toInteger()
     
-    logging "linear multiplier value = ${result} (xa = $xa ya = $ya x = $x)"
+    logging "linear multiplier slope = $slope x = $x | y = ${result}"
     return result.toInteger()
 
 }
@@ -525,12 +537,12 @@ def setDimmers(int val){
         if(aVal==val){message = "$a level is ok"}
         logging(message)
 
-        a.on()
-        if(aVal != val)
-        {
+        //a.on()
+        //if(aVal != val)
+        //{
             a.setLevel(val)
             logging("${dimmers[i]} set to $val ---")
-        }
+        //}
 
     }
 }
@@ -614,6 +626,7 @@ def disablelogging(){
 }
 
 def poll(){
+    logging "polling devices"
     boolean haspoll = false
     boolean hasrefresh = false
     dimmers.each{
