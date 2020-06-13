@@ -176,23 +176,14 @@ def pageSetup() {
             input"logarithm", "bool", title:"Use logarithmic variations (beta)", value:false, submitOnChange:true
             if(logarithm)
             {
-
-                input "sensitivity", "decimal", range: "3.0..10.0", required:true, title: "Set a sensitivity value", description:"DECIMAL between 3.0 and 10.0", submitOnChange:true // serves as xa basis in linear determination of log() function's multiplier
-                paragraph "The higher the value, the more luminance will be needed for $app.name to turn off your lights. For a maximum illuminance of 1000 (max value for most indoor sensors), a value between 5.0 and 6.0 is recommended"
-                 
-                if(sensitivity)
+                input "advanced", "bool", title: "Advanced logarithm settings (use with caution and with the graph helper)", submitOnChange:true, defaultValue:false
+                if(!advanced)
                 {
-                    boolean wrong = sensitivity > 10.0 || sensitivity < 3.0
-                    def message = "${wrong ? "WARNING WRONG VALUE PLEASE SET A VALUE BETWEEN 3 and 10!" : "sensitivity set to: $sensitivity"}"
-
-                    if(wrong) {
-                        paragraph "<div style=\"width:102%;background-color:red;color:black;padding:4px;font-weight: bold;box-shadow: 10px 10px 10px #141414;margin-left: -10px\">${message}</div>"
-                        log.warn message
-                    }
-                    else 
-                    {
-                        log.debug message
-                    }
+                    logarithmPref()
+                }
+                else 
+                {
+                    advancedLogPref()
                 }
             }
         }
@@ -205,6 +196,62 @@ def pageSetup() {
         {
             input "update", "button", title: "UPDATE"
             input "run", "button", title: "RUN"
+        }
+    }
+}
+def advancedLogPref(){
+
+
+    if(advanced)
+    {
+        def url = "<a href='https://www.desmos.com/calculator/simnxkfljb' target='_blank'><div style=\"color:blue;font-weight:bold\"><center>GRAPH HELPER</center></div></a>"
+        //paragraph url
+
+        input "offset", "number", range: "3..10000", required:true, title: "Offset: value named 'a' in graph tool", description:"Integer between 3 and 10000", submitOnChange:true
+        logarithmPref()
+        input "multiplier", "number", range: "3..3000", required:true, title: "Multipler: value named 'm' in graph tool", description:"Integer between 3 and 3000", submitOnChange:true
+        def message =""" $url 
+<div style=\"color:black;font-weight:bold\"><center>In the graph helper, move the cursors to create the ideal curve for your specific environment.</center></div>
+
+a. Cursor named "a" is an offset. it moves the curve up and down, without changing the curve's shape. 
+b. Cursor named "b" is the logarithm's base. It changes the shape of the curve by making it slightly stipper or flatter
+c. Cursor named "m" is the multiplier. It changes the curve's shape more drastically. 
+2. Make sure the curve meets the abscisse (the horizontal line) at the level of your sensor's max lux value (unless you want your lights to never turn off). 
+3. If your curve ends up crossing the abscisse and go into negative values, those values will be ignored: 
+lights will be set to 0 as soon as your sensor returns a value corresponding at the point where the curve crosses the abcisse.
+4. Don't forget to update 'b' with the sensitivity value you've just set above
+5. Once you've found your ideal curve in the graph helper, simply report the values of a, b and m here.
+
+Suggested values for an environment of 1000 max lux (most indoor sensors): 
+a = 300 (offset)
+b = 7   (sensitivity as log base)
+m = 70  (multiplier; sets the gradient of the curve)
+
+"""
+        paragraph """<div style=\"width:102%;background-color:grey;color:white;padding:4px;font-weight: bold;box-shadow: 10px 10px 10px #141414;margin-left: -10px\">${message}</div>"""
+    }
+}
+def logarithmPref(){
+    
+    def title = advanced ? "Base: value named 'b' in the graph tool (decimal value such as '5.0' or '4.9')" : "set a sensitivity value"
+    input "sensitivity", "decimal", range: "3.0..10.0", required:true, title: "$title", description:"DECIMAL between 3.0 and 10.0", submitOnChange:true // serves as xa basis in linear determination of log() function's multiplier
+    if(!advanced)
+    {
+    paragraph "The higher the value, the more luminance will be needed for $app.name to turn off your lights. For a maximum illuminance of 1000 (max value for most indoor sensors), a value between 5.0 and 6.0 is recommended"
+    }
+
+    if(sensitivity)
+    {
+        boolean wrong = sensitivity > 10.0 || sensitivity < 3.0
+        def message = "${wrong ? "WRONG VALUE PLEASE SET A VALUE BETWEEN 3 and 10!" : "sensitivity set to $sensitivity"}"
+
+        if(wrong) {
+            paragraph "<div style=\"width:102%;background-color:red;color:black;padding:4px;font-weight: bold;box-shadow: 10px 10px 10px #141414;margin-left: -10px\">${message}</div>"
+            log.warn message
+        }
+        else 
+        {
+            log.debug message
         }
     }
 }
@@ -265,7 +312,7 @@ def initialize() {
     subscribe(sensor, "illuminance", illuminanceHandler)
 
     schedule("0 0/1 * * * ?", mainloop) 
-    schedule("0 0/1 * * * ?", poll) 
+    schedule("0 0/10 * * * ?", poll) 
 
     logging("initialization ok")
     mainloop()
@@ -477,12 +524,12 @@ No max value in logarithmic mode..
     def y = null // value to find
     def x = illum != 0 ? illum : 1 // current illuminance // prevent "ava.lang.ArithmeticException: Division by zero "
 
-    def m = 70 // DEPRECATED: getMultiplier(maxIllum) // multiplier; must vary with max illuminance
-    def a = 300
+    def m = multiplier ? multiplier : 70 
+    def a = offset ? offset : 300
     def base = sensitivity // this value is the overall sensitivity set by the user
 
     y = (Math.log10(1/x)/Math.log10(base))*m+a
-    logging "LOGARITHMIC algebra found y = $y with $m as multiplier"
+    logging "LOGARITHMIC algebra found y = $y with $m as multiplier and $a as an offset value"
     dimVal = y.toInteger()
     dimVal = otherApp ? (dimVal < 1 ? dimVal = 1 : dimVal) : (dimVal < 0 ? dimVal = 0 : dimVal)
     dimVal = dimVal > 100 ? 100 : dimVal 
@@ -515,7 +562,7 @@ def setDimmers(int val){
     }
 
     val = val < 0 ? 0 : (val > 100 ? 100 : val) // just a precaution
-  
+
     dimmers.setLevel(val)
     logging("${dimmers} set to $val ---")
 }
@@ -608,20 +655,20 @@ def poll(){
 }
 
 /*i = 0
-    for(s!=0;i<s;i++)
-    {
-        def a = dimmers[i]
-        def aVal = dimmers[i].currentValue("level")
-        def message = "$a is currently at ${aVal}% and needs to be set to ${val}%"
-        logging(message)
-        if(aVal==val){message = "$a level is ok"}
-        logging(message)
+for(s!=0;i<s;i++)
+{
+def a = dimmers[i]
+def aVal = dimmers[i].currentValue("level")
+def message = "$a is currently at ${aVal}% and needs to be set to ${val}%"
+logging(message)
+if(aVal==val){message = "$a level is ok"}
+logging(message)
 
-        //a.on()
-        //if(aVal != val)
-        //{
-        a.setLevel(val)
-        logging("${dimmers[i]} set to $val ---")
-        //}
+//a.on()
+//if(aVal != val)
+//{
+a.setLevel(val)
+logging("${dimmers[i]} set to $val ---")
+//}
 
-    }*/
+}*/
