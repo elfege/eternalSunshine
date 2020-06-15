@@ -197,8 +197,19 @@ def pageSetup() {
             input "update", "button", title: "UPDATE"
             input "run", "button", title: "RUN"
         }
+
+        section("")
+        {
+            // def url = "https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6JJV76SQGDVD6&source=url"
+            def url = "<a href='https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6JJV76SQGDVD6&source=url' target='_blank'><div style=\"color:blue;font-weight:bold\"><center>CLICK HERE TO SUPPORT THIS APP!</center></div></a>"
+            paragraph """
+
+$url
+"""
+        }
     }
 }
+
 def advancedLogPref(){
 
 
@@ -207,9 +218,9 @@ def advancedLogPref(){
         def url = "<a href='https://www.desmos.com/calculator/simnxkfljb' target='_blank'><div style=\"color:blue;font-weight:bold\"><center>GRAPH HELPER</center></div></a>"
         //paragraph url
 
+        input "multiplier", "number", range: "3..3000", required:true, title: "Multipler: value named 'm' in graph tool", description:"Integer between 3 and 3000", submitOnChange:true
         input "offset", "number", range: "3..10000", required:true, title: "Offset: value named 'a' in graph tool", description:"Integer between 3 and 10000", submitOnChange:true
         logarithmPref()
-        input "multiplier", "number", range: "3..3000", required:true, title: "Multipler: value named 'm' in graph tool", description:"Integer between 3 and 3000", submitOnChange:true
         def message =""" $url 
 <div style=\"color:black;font-weight:bold\"><center>In the graph helper, move the cursors to create the ideal curve for your specific environment.</center></div>
 
@@ -219,7 +230,6 @@ c. Cursor named "m" is the multiplier. It changes the curve's shape more drastic
 2. Make sure the curve meets the abscisse (the horizontal line) at the level of your sensor's max lux value (unless you want your lights to never turn off). 
 3. If your curve ends up crossing the abscisse and go into negative values, those values will be ignored: 
 lights will be set to 0 as soon as your sensor returns a value corresponding at the point where the curve crosses the abcisse.
-4. Don't forget to update 'b' with the sensitivity value you've just set above
 5. Once you've found your ideal curve in the graph helper, simply report the values of a, b and m here.
 
 Suggested values for an environment of 1000 max lux (most indoor sensors): 
@@ -232,12 +242,12 @@ m = 70  (multiplier; sets the gradient of the curve)
     }
 }
 def logarithmPref(){
-    
+
     def title = advanced ? "Base: value named 'b' in the graph tool (decimal value such as '5.0' or '4.9')" : "set a sensitivity value"
     input "sensitivity", "decimal", range: "3.0..10.0", required:true, title: "$title", description:"DECIMAL between 3.0 and 10.0", submitOnChange:true // serves as xa basis in linear determination of log() function's multiplier
     if(!advanced)
     {
-    paragraph "The higher the value, the more luminance will be needed for $app.name to turn off your lights. For a maximum illuminance of 1000 (max value for most indoor sensors), a value between 5.0 and 6.0 is recommended"
+        paragraph "The higher the value, the more luminance will be needed for $app.name to turn off your lights. For a maximum illuminance of 1000 (max value for most indoor sensors), a value between 5.0 and 6.0 is recommended"
     }
 
     if(sensitivity)
@@ -476,7 +486,6 @@ restrictedModes = $restrictedModes
     }
 
 }
-
 def getDimVal(){
 
     def currentSensor = switchSensor2?.currentValue("switch") == "switchState" ? sensor2 : sensor
@@ -597,7 +606,6 @@ boolean stillActive(){
     description "motion $result"
     return result
 }
-
 def getTimeout(){
     def result = noMotionTime // default
     def valMode = location.mode
@@ -638,12 +646,10 @@ def description(msg){
 def logwarn(msg){
     log.warn msg
 }
-
 def disablelogging(){
     app.updateSetting("enablelogging",[value:"false",type:"bool"])
     log.warn "logging disabled!"
 }
-
 def poll(){
     logging "polling devices"
     boolean haspoll = false
@@ -653,22 +659,15 @@ def poll(){
         if(it.hasCommand("refresh")){ it.refresh() }else{logging("$it doesn't have refresh command")}
     }
 }
+def donate(){
+    def a = """
+<form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
+<input type="hidden" name="cmd" value="_s-xclick" />
+<input type="hidden" name="hosted_button_id" value="6JJV76SQGDVD6" />
+<input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" title="PayPal - The safer, easier way to pay online!" alt="Donate with PayPal button" />
+<img alt="" border="0" src="https://www.paypal.com/en_US/i/scr/pixel.gif" width="1" height="1" />
+</form>
 
-/*i = 0
-for(s!=0;i<s;i++)
-{
-def a = dimmers[i]
-def aVal = dimmers[i].currentValue("level")
-def message = "$a is currently at ${aVal}% and needs to be set to ${val}%"
-logging(message)
-if(aVal==val){message = "$a level is ok"}
-logging(message)
-
-//a.on()
-//if(aVal != val)
-//{
-a.setLevel(val)
-logging("${dimmers[i]} set to $val ---")
-//}
-
-}*/
+"""
+    return a
+}
