@@ -217,10 +217,10 @@ def advancedLogPref(){
     {
         def url = "<a href='https://www.desmos.com/calculator/xzmpszawyi' target='_blank'><div style=\"color:blue;font-weight:bold\"><center>GRAPH HELPER</center></div></a>"
         //paragraph url
-
-        input "multiplier", "number", range: "3..3000", required:true, title: "Multipler: value named 'm' in graph tool", description:"Integer between 3 and 3000", submitOnChange:true
         input "offset", "number", range: "3..10000", required:true, title: "Offset: value named 'a' in graph tool", description:"Integer between 3 and 10000", submitOnChange:true
         logarithmPref()
+        input "multiplier", "number", range: "3..3000", required:true, title: "Multipler: value named 'c' in graph tool", description:"Integer between 3 and 3000", submitOnChange:true
+
         def message =""" $url 
 <div style=\"color:black;font-weight:bold\"><center>In the graph helper, move the cursors to create the ideal curve for your specific environment.</center></div>
 
@@ -533,7 +533,7 @@ No max value in logarithmic mode..
     def y = null // value to find
     def x = illum != 0 ? illum : 1 // current illuminance // prevent "ava.lang.ArithmeticException: Division by zero "
 
-    
+
     def a = offset ? offset : 300
     def b = sensitivity // this value is the overall sensitivity set by the user
     def c = multiplier ? multiplier : 70 
