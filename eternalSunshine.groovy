@@ -215,7 +215,7 @@ def advancedLogPref(){
 
     if(advanced)
     {
-        def url = "<a href='https://www.desmos.com/calculator/simnxkfljb' target='_blank'><div style=\"color:blue;font-weight:bold\"><center>GRAPH HELPER</center></div></a>"
+        def url = "<a href='https://www.desmos.com/calculator/xzmpszawyi' target='_blank'><div style=\"color:blue;font-weight:bold\"><center>GRAPH HELPER</center></div></a>"
         //paragraph url
 
         input "multiplier", "number", range: "3..3000", required:true, title: "Multipler: value named 'm' in graph tool", description:"Integer between 3 and 3000", submitOnChange:true
@@ -226,16 +226,16 @@ def advancedLogPref(){
 
 a. Cursor named "a" is an offset. it moves the curve up and down, without changing the curve's shape. 
 b. Cursor named "b" is the logarithm's base. It changes the shape of the curve by making it slightly stipper or flatter
-c. Cursor named "m" is the multiplier. It changes the curve's shape more drastically. 
+c. Cursor named "c" is the multiplier. It changes the curve's shape more drastically. 
 2. Make sure the curve meets the abscisse (the horizontal line) at the level of your sensor's max lux value (unless you want your lights to never turn off). 
 3. If your curve ends up crossing the abscisse and go into negative values, those values will be ignored: 
 lights will be set to 0 as soon as your sensor returns a value corresponding at the point where the curve crosses the abcisse.
-5. Once you've found your ideal curve in the graph helper, simply report the values of a, b and m here.
+5. Once you've found your ideal curve in the graph helper, simply report the values of a, b and c here.
 
 Suggested values for an environment of 1000 max lux (most indoor sensors): 
 a = 300 (offset)
 b = 7   (sensitivity as log base)
-m = 70  (multiplier; sets the gradient of the curve)
+c = 70  (multiplier; sets the gradient of the curve)
 
 """
         paragraph """<div style=\"width:102%;background-color:grey;color:white;padding:4px;font-weight: bold;box-shadow: 10px 10px 10px #141414;margin-left: -10px\">${message}</div>"""
@@ -533,20 +533,18 @@ No max value in logarithmic mode..
     def y = null // value to find
     def x = illum != 0 ? illum : 1 // current illuminance // prevent "ava.lang.ArithmeticException: Division by zero "
 
-    def m = multiplier ? multiplier : 70 
+    
     def a = offset ? offset : 300
-    def base = sensitivity // this value is the overall sensitivity set by the user
+    def b = sensitivity // this value is the overall sensitivity set by the user
+    def c = multiplier ? multiplier : 70 
 
-    y = (Math.log10(1/x)/Math.log10(base))*m+a
-    logging "LOGARITHMIC algebra found y = $y with $m as multiplier and $a as an offset value"
+    y = (Math.log10(1/x)/Math.log10(b))*c+a
+    logging "log${b}(1/${x})*${c}+${a} -> $y"
     dimVal = y.toInteger()
     dimVal = otherApp ? (dimVal < 1 ? dimVal = 1 : dimVal) : (dimVal < 0 ? dimVal = 0 : dimVal)
     dimVal = dimVal > 100 ? 100 : dimVal 
 
-    logging """illuminance: $illum, -|- sensitivity: $sensitivity -|- ${maxValue ? "(user defined maxIllum = $maxIllum)" : ""}
-
-LOGARITHMIC dimming value = ${dimVal} 
-"""
+    logging "LOGARITHMIC dimming value = ${dimVal} (illuminance: $illum)"
     return dimVal
 }
 def setDimmers(int val){
