@@ -115,7 +115,7 @@ def pageSetup() {
             input "sensor2", "capability.illuminanceMeasurement", title: "pick a second sensor", required:false, multiple: false, submitOnChange: true
             if(sensor2){
                 input "switchSensor2", "capability.switch", title: "when this switch is on/off, use second sensor", required:true, multiple:false, submitOnChange:true
-                input "switchState", "enum", title: "when it is on or off?", options: ["when on", "when off"]
+                input "switchState", "enum", title: "when it is on or off?", options: ["on", "off"], required: true
             }
         }
         section("Location Modes Management") {
@@ -488,11 +488,15 @@ restrictedModes = $restrictedModes
 }
 def getDimVal(){
 
-    def currentSensor = switchSensor2?.currentValue("switch") == "switchState" ? sensor2 : sensor
+    boolean switchStateTrue = switchSensor2?.currentValue("switch") == switchState
+    def currentSensor =  switchStateTrue ? sensor2 : sensor
     def illum = currentSensor.currentValue("illuminance")
 
     logging """
-LIN
+LINEAR
+${switchSensor2 ? "switchSensor2 = $switchSensor2" : ""}
+${switchSensor2 ? "switchStateTrue = $switchStateTrue" : ""}
+
 illuminance sensor is: $currentSensor
 illuminance is: $illum lux
 maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.maxValue = $state.maxValue (learned value)"}
@@ -521,11 +525,15 @@ linear dimming value result = ${dimVal}
 }
 def getDimValLog(){ // exponential calculation
 
-    def currentSensor = switchSensor2?.currentValue("switch") == "switchState" ? sensor2 : sensor
+    boolean switchStateTrue = switchSensor2?.currentValue("switch") == switchState
+    def currentSensor =  switchStateTrue ? sensor2 : sensor
     def illum = currentSensor.currentValue("illuminance")
 
     logging """
-LOG
+LOGARITHMIC
+${switchSensor2 ? "switchSensor2 = $switchSensor2" : ""}
+${switchSensor2 ? "switchStateTrue = $switchStateTrue" : ""}
+
 illuminance sensor is: $currentSensor
 illuminance is: $illum lux 
 No max value in logarithmic mode..
@@ -575,6 +583,13 @@ def setDimmers(int val){
 }
 boolean stillActive(){
     boolean result = true
+    boolean inTimeOutModes = modetimeout ? location.mode in timeoutModes : true
+
+    if(modetimeout && !inTimeOutModes) // if use timeout modes and not in this mode, then ignore motion (keep lights on)
+    {
+        logging "Location is outside of time out modes, ignoring motion events"
+        return result
+    }
 
     if(usemotion)
     {
@@ -587,7 +602,7 @@ boolean stillActive(){
         boolean AnyCurrentlyActive = motionSensors.findAll{it.currentValue("motion") == "active"}?.size() != 0
         if(AnyCurrentlyActive) 
         {
-            description("return true")
+            //description("return true")
             return true  // for faster execution when true
         }
 
