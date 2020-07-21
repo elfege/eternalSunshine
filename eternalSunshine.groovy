@@ -525,7 +525,7 @@ linear dimming value result = ${dimVal}
 }
 def getDimValLog(){ // exponential calculation
 
-    boolean switchStateTrue = switchSensor2?.currentValue("switch") == switchState
+    boolean switchStateTrue = switchSensor2 ? switchSensor2?.currentValue("switch") == switchState : false
     def currentSensor =  switchStateTrue ? sensor2 : sensor
     def illum = currentSensor.currentValue("illuminance")
 
