@@ -136,7 +136,6 @@ def pageSetup() {
                     def dimValMode = []
                     for(modes.size() != 0; i < modes.size(); i++){
                         input "dimValMode${i}", "number", required:true, title: "select a maximum value for ${modes[i]}"
-
                     }
                 }
             }
@@ -371,10 +370,10 @@ def illuminanceHandler(evt){
     logging("$evt.name is now $evt.value")
 
     // learn max value if required
-    def currentSensor = switchSensor2?.currentValue("switch") == "switchState" ? sensor2 : sensor
+    def currentSensor = switchSensor2 == null || sensor2 == null ? sensor : switchSensor2?.currentValue("switch") == "switchState" ? sensor2 : sensor 
     def illum = currentSensor.currentValue("illuminance")
     def maxVal = atomicState.maxValue.toInteger()
-    if(idk && illum.toInteger() > maxVal)
+    if(idk && illum?.toInteger() > maxVal)
     {
         atomicState.maxValue = illum
         logging("new maximum lux value registered as: $atomicState.maxValue")
@@ -551,7 +550,7 @@ maxVal (for curtains) = $maxVal
     }
     else
     {
-        log.info "TOTAL EXECUTION TIME between $atomicState.Tname to 'end of main loop' = ${performance} seconds"
+        description "${performance} seconds between $atomicState.Tname to 'end of main loop'"
     }
     atomicState.Tname = "end of main loop"
     atomicState.T = now()
