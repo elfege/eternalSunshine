@@ -16,7 +16,7 @@ definition(
     author: "elfege",
     description: "Adjust dimmers with illuminance",
     category: "Convenience",
-    iconUrl: "http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w",
+    iconUrl: "http://statric1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w",
     iconX2Url: "http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w",
     iconX3Url: "http://static1.squarespace.com/static/5751f711d51cd45f35ec6b77/t/59c561cb268b9638e8ba6c23/1512332763339/?format=1500w",
 )
@@ -24,13 +24,11 @@ definition(
 preferences {
 
     page name:"pageSetup"
-    page name:"settings"
-    page name:"Options"
 
 }
 def pageSetup() {
 
-    if(state.paused)
+    if(atomicState.paused)
     {
         log.debug "new app label: ${app.label}"
         while(app.label.contains(" (Paused) "))
@@ -61,19 +59,10 @@ def pageSetup() {
 
     return dynamicPage(pageProperties) {
 
-        if(state.paused == true)
-        {
-            state.button_name = "resume"
-            logging("button name is: $state.button_name")
-        }
-        else 
-        {
-            state.button_name = "pause"
-            logging("button name is: $state.button_name")
-        }
         section("")
         {
-            input "pause", "button", title: "$state.button_name"
+            atomicState.button_name = atomicState.paused == true ? "resume" : "pause"
+            input "pause", "button", title: "$atomicState.button_name"
         }
 
         section("Select the dimmers you wish to control") {
@@ -106,16 +95,33 @@ def pageSetup() {
                 else 
                 {
                     paragraph "It will take up to 72 hours for the app to learn the maxium illuminance value this device can return, but it will start working immediately based on a preset value"
-                    state.maxValue = state.maxValue == null ? 1000 : state.maxValue // temporary value
+                    atomicState.maxValue = atomicState.maxValue == null ? 1000 : atomicState.maxValue // temporary value
                 }
-                logging( "maxValue = $state.maxValue")
+                logging( "maxValue = $atomicState.maxValue")
 
             }
 
             input "sensor2", "capability.illuminanceMeasurement", title: "pick a second sensor", required:false, multiple: false, submitOnChange: true
             if(sensor2){
                 input "switchSensor2", "capability.switch", title: "when this switch is on/off, use second sensor", required:true, multiple:false, submitOnChange:true
-                input "switchState", "enum", title: "when it is on or off?", options: ["on", "off"], required: true
+                input "switchState", "enum", title: "when it is on or off?", options: ["on", "off"], required: true, submitOnChange:true
+                if(switchSensor2 && switchState)
+                {
+                    input "highLuxSwitch", "bool", title:"when $sensor returns high lux, turn $switchState $switchSensor2", submitOnChange:true
+                    if(highLuxSwitch)
+                    {
+                        input "onlyIfTempHigh", "bool", title:"Do this only when a sensor returns a temperature that is higher than a certain value", submitOnChange:true
+                    }
+                    if(onlyIfTempHigh) 
+                    {
+                        input "highTempSensor", "capability.temperatureMeasurement", title: "Select a temperature sensor", required:true, submitOnChange:true
+                        if(highTempSensor)
+                        {
+                            input "tempThreshold", "number", title: "select a temperature threshold", required: true, submitOnChange:true
+                        }
+                    }
+                    input "toggleBack", "bool", title: "turn $switchSensor2 back ${switchState == "off" ? "on" : "off"} once lux are back to a lower value", submitOnChange:true 
+                }
             }
         }
         section("Location Modes Management") {
@@ -126,7 +132,7 @@ def pageSetup() {
 
                 if(modes){
                     def i = 0
-                    state.dimValMode = []
+                    atomicState.dimValMode = []
                     def dimValMode = []
                     for(modes.size() != 0; i < modes.size(); i++){
                         input "dimValMode${i}", "number", required:true, title: "select a maximum value for ${modes[i]}"
@@ -150,7 +156,7 @@ def pageSetup() {
 
                         if(timeoutModes){
                             def i = 0
-                            state.timeoutValMode = []
+                            atomicState.timeoutValMode = []
                             def timeoutValMode = []
                             for(timeoutModes.size() != 0; i < timeoutModes.size(); i++){
                                 input "timeoutValMode${i}", "number", required:true, title: "select a timeout value for ${timeoutModes[i]}"
@@ -158,6 +164,7 @@ def pageSetup() {
                         }
                     }
                 }
+                input "switches", "capability.switch", title: "also turn on/off some light switches", multiple: true, required:false
             }
         }
         section("Other App Conflict Management")
@@ -197,7 +204,6 @@ def pageSetup() {
             input "update", "button", title: "UPDATE"
             input "run", "button", title: "RUN"
         }
-
         section("")
         {
             // def url = "https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6JJV76SQGDVD6&source=url"
@@ -277,10 +283,10 @@ def updated() {
 }
 def initialize() {
 
-    state.maxValue = 1000
+    atomicState.maxValue = 1000
     if(!idk)
     {
-        state.maxValue = maxValue
+        atomicState.maxValue = maxValue
     }
 
     if(enablelogging == true){
@@ -292,9 +298,9 @@ def initialize() {
         log.warn "debug logging disabled!"
     }
 
-    state.motionEvents = 0
-    state.override = false
-    state.lastDimVal = dimmers[0].currentValue("level")
+    atomicState.motionEvents = 0
+    atomicState.override = false
+    atomicState.lastDimVal = dimmers[0].currentValue("level")
 
 
     int i = 0
@@ -335,11 +341,13 @@ def switchHandler(evt){
         return
     }
     logging("$evt.device is now set to $evt.value - - SOURCE: is $evt.source TYPE is $evt.type isPhysical: ${evt.isPhysical()}")
-    state.lastEvent = evt.name
+    atomicState.lastEvent = evt.name
     //mainloop() // infinite feedback loop!
 }
 def locationModeChangeHandler(evt){
     logging("$evt.name is now in $evt.value mode")   
+    atomicState.Tname = "location mode change handler"
+    atomicState.T = now() 
     mainloop()
 }
 def dimmersHandler(evt){
@@ -351,7 +359,7 @@ def dimmersHandler(evt){
     }
     logging("** $evt.device set to $evt.value **")
 
-    //mainloop() // infinite feedback loop if triggered from here...
+    //mainloop() // infinite feedback loop if called from here...
 }
 def illuminanceHandler(evt){
 
@@ -365,17 +373,20 @@ def illuminanceHandler(evt){
     // learn max value if required
     def currentSensor = switchSensor2?.currentValue("switch") == "switchState" ? sensor2 : sensor
     def illum = currentSensor.currentValue("illuminance")
-    if(idk && illum.toInteger() > state.maxValue.toInteger())
+    def maxVal = atomicState.maxValue.toInteger()
+    if(idk && illum.toInteger() > maxVal)
     {
-        state.maxValue = illum
-        logging("new maximum lux value registered as: $state.maxValue")
+        atomicState.maxValue = illum
+        logging("new maximum lux value registered as: $atomicState.maxValue")
     }
     else 
     {
         logging "max value preset by user: ${maxValue}lux"
-        state.maxValue = maxValue
+        atomicState.maxValue = maxValue
     }
 
+    atomicState.Tname = "illuminanceHandler"
+    atomicState.T = now() 
     mainloop()
 
 }
@@ -389,7 +400,12 @@ def motionHandler(evt){
 
     logging("MOTION ----- $evt.device is $evt.value")
 
-    if(usemotion) mainloop()
+    if(usemotion) 
+    {
+        atomicState.Tname = "motionHandler"
+        atomicState.T = now() 
+        mainloop()
+    }
 
 }
 def appButtonHandler(btn) {
@@ -400,9 +416,9 @@ def appButtonHandler(btn) {
         return
     }
     switch(btn) {
-        case "pause":state.paused = !state.paused
-        log.debug "state.paused = $state.paused"
-        if(state.paused)
+        case "pause":atomicState.paused = !atomicState.paused
+        log.debug "atomicState.paused = $atomicState.paused"
+        if(atomicState.paused)
         {
             log.debug "unsuscribing from events..."
             unsubscribe()  
@@ -416,16 +432,26 @@ def appButtonHandler(btn) {
             break
         }
         case "update":
-        state.paused = false
+        atomicState.paused = false
         updated()
         break
         case "run":
-        if(!state.paused) mainloop()
+        if(!atomicState.paused) 
+        {
+            atomicState.Tname = "button handler"
+            atomicState.T = now() 
+            mainloop()
+        }
         break
 
     }
 }
+
 def mainloop(){
+
+    atomicState.T = atomicState.T != null ? atomicState.T : now()
+    atomicState.T = atomicState.Tname == "end of main loop" ? atomicState.T = now() : atomicState.T // when called by schedule()
+    atomicState.Tname = atomicState.Tname == "end of main loop" ? atomicState.Tname = "schedule call" :  atomicState.Tname
 
     if(location.mode in restrictedModes)
     {
@@ -433,34 +459,35 @@ def mainloop(){
         return
     }
     boolean Active = stillActive()
-    boolean dimOff = dimmers.findAll{it.currentValue("switch") == "off"}.size() == dimmers.size()
-    boolean dimAreOff = false
+    boolean dimOff = dimmers.findAll{it.currentValue("switch") == "off"}.size() == dimmers.size() 
+    boolean keepDimmersOff = false
 
     logging("""
 number of dimmers that are off = ${dimmers.findAll{it.currentValue("switch") == "off"}.size()}
 number of dimmers that are set to 0 = ${dimmers.findAll{it.currentValue("level") == 0}.size()}
 dimmers.size() = ${dimmers.size()}
 """)
-    // if we don't use motion, then dimAreOff is based on actual status (defined above), otherwise, it's false by default
+    // if we don't use motion, then keepDimmersOff is based on actual status (defined above), otherwise, it's false by default
     // so to allow the app to continue managing the dimmers based on motion and illuminance
-    dimAreOff = usemotion ? false : dimOff 
-    logging("1: dimAreOff = $dimAreOff")
+    keepDimmersOff = usemotion ? false : dimOff 
+    logging("1: keepDimmersOff = $keepDimmersOff")
 
     // now, if user has selected the override option, then the app will take the off status as override and not turn them back on
     // whether or not usemotion is true (a bit redundant but necessary to avoid discrepancies). 
-    dimAreOff = (override && dimOff && !usemotion) ? true : (usemotion ? false : dimOff)
+    keepDimmersOff = (override && dimOff && !usemotion) ? true : (usemotion ? false : dimOff)
     if(override && usemotion)
     {
-        app.updateSetting("override",[value:"false",type:"bool"]) // fool proofing... 
+        app.updateSetting("override",[value:"false",type:"bool"]) // fool proofing... override can't work with usemotion
     }
-    logging("""2: dimAreOff = $dimAreOff
+     
+    logging("""2: keepDimmersOff = $keepDimmersOff
 usemotion = $usemotion
 """)
 
 
     logging("""
 usemotion = $usemotion
-dimAreOff = $dimAreOff
+keepDimmersOff = $keepDimmersOff
 dimOff = $dimOff
 outofmodes = $outofmodes
 override = $override ${usemotion ? "" : "(Redundant when not using motion)"}
@@ -470,38 +497,85 @@ restrictedModes = $restrictedModes
 
 """)
 
-    if(Active && !dimAreOff)
+    if(Active && !keepDimmersOff)
     {
         def dimVal = logarithm ? getDimValLog() : getDimVal()
         setDimmers(dimVal)
+        switches?.on()
+        if(switches) logging "${switches} turned off"
     }
-    else if(!usemotion && dimAreOff)
+    else if(!usemotion && keepDimmersOff)
     {
-        log.info "dimmers are off and managed by another app, $app.label will resume when they're turned back on dimAreOff = $dimAreOff"
+        log.info "dimmers are off and managed by another app, $app.label will resume when they're turned back on keepDimmersOff = $keepDimmersOff"
     }
     else 
     {
         logging("no motion...")
         dimmers.off() 
+        switches?.off()
+        if(switches) logging "${switches} turned off"
     }
 
+    if(highLuxSwitch)
+    {
+        def outsideIllum = sensor.currentValue("illuminance").toInteger()
+        def maxVal = atomicState.maxValue != null ? atomicState.maxValue.toInteger() : maxValue.toInteger()
+        def NeedCurtainOff = onlyIfTempHigh ? highTempSensor.currentValue("temperature") >= tempThreshold && outsideIllum >= maxVal : outsideIllum >= maxVal
+
+
+        description """*********
+outsideIllum = $outsideIllum
+maxVal (for curtains) = $maxVal
+
+"""
+        atomicState.curtainsWereTurnedOff = atomicState.curtainsWereTurnedOff != null ? atomicState.curtainsWereTurnedOff : false
+
+        if(NeedCurtainOff && !atomicState.curtainsWereTurnedOff)
+        {
+            switchSensor2."${switchState}"()
+            atomicState.curtainsWereTurnedOff = true
+            logging "turning $switchSensor2 $switchState due to excess of illuminance"
+        }
+        else if(!NeedCurtainOff && toggleBack && atomicState.curtainsWereTurnedOff)
+        {
+            switchSensor2."${switchState == "off" ? "on" : "off"}"()
+            atomicState.curtainsWereTurnedOff = false
+            logging "turning $switchSensor2 ${switchState == "off" ? "on" : "off"} because illumiance is low again"
+        }
+
+    }
+    float performance = (now() - atomicState.T)/1000
+    if(performance > 1)
+    {
+        logwarn "TOTAL EXECUTION TIME between $atomicState.Tname and 'end of main loop' = ${performance} seconds - HUB IS SLOW"
+    }
+    else
+    {
+        log.info "TOTAL EXECUTION TIME between $atomicState.Tname to 'end of main loop' = ${performance} seconds"
+    }
+    atomicState.Tname = "end of main loop"
+    atomicState.T = now()
 }
+
 def getDimVal(){
 
-    boolean switchStateTrue = switchSensor2?.currentValue("switch") == switchState
+    boolean switchStateTrue = switchSensor2 ? switchSensor2?.currentValue("switch") == switchState : false
     def currentSensor =  switchStateTrue ? sensor2 : sensor
     def illum = currentSensor.currentValue("illuminance")
 
     logging """
 LINEAR
 ${switchSensor2 ? "switchSensor2 = $switchSensor2" : ""}
+${switchSensor2 ? "${switchSensor2?.currentValue("switch")}" : ""}
 ${switchSensor2 ? "switchStateTrue = $switchStateTrue" : ""}
+${switchSensor2 ? "switchState boolean reference is: $switchState" : ""}
+
 
 illuminance sensor is: $currentSensor
 illuminance is: $illum lux
-maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "state.maxValue = $state.maxValue (learned value)"}
+maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "atomicState.maxValue = $atomicState.maxValue (learned value)"}
 """
-    def maxIllum = idk ? state.maxValue : maxValue  // if idk selected, then use last learned max value (state.maxValue)
+    def maxIllum = idk ? atomicState.maxValue : maxValue  // if idk selected, then use last learned max value (atomicState.maxValue)
 
 
     def y = null // value to find
@@ -525,14 +599,18 @@ linear dimming value result = ${dimVal}
 }
 def getDimValLog(){ // exponential calculation
 
-    boolean switchStateTrue = switchSensor2 ? switchSensor2?.currentValue("switch") == switchState : false
+    boolean switchStateTrue = switchSensor2 ? switchSensor2.currentValue("switch") == switchState : false
     def currentSensor =  switchStateTrue ? sensor2 : sensor
     def illum = currentSensor.currentValue("illuminance")
+
 
     logging """
 LOGARITHMIC
 ${switchSensor2 ? "switchSensor2 = $switchSensor2" : ""}
+${switchSensor2 ? "${switchSensor2?.currentValue("switch")}" : ""}
 ${switchSensor2 ? "switchStateTrue = $switchStateTrue" : ""}
+${switchSensor2 ? "switchState boolean reference is: $switchState" : ""}
+
 
 illuminance sensor is: $currentSensor
 illuminance is: $illum lux 
@@ -560,7 +638,7 @@ def setDimmers(int val){
     def i = 0
     def s = dimmers.size()
 
-    if(modes)
+    if(modemgt)
     {
         if(location.mode in modes){
 
@@ -578,10 +656,12 @@ def setDimmers(int val){
 
     val = val < 0 ? 0 : (val > 100 ? 100 : val) // just a precaution
 
+
     dimmers.setLevel(val)
     logging("${dimmers} set to $val ---")
 }
 boolean stillActive(){
+
     boolean result = true
     boolean inTimeOutModes = modetimeout ? location.mode in timeoutModes : true
 
@@ -644,15 +724,15 @@ def getTimeout(){
 }
 def resetMotionEvents(){
     logging("No motion event has occured during the past $noMotionTime minutes")
-    state.motionEvents = 0   
+    atomicState.motionEvents = 0   
 }
 def logging(msg){
-    def debug = settings.find{it.key == "enablelogging"}?.value
+    //def debug = settings.find{it.key == "enablelogging"}?.value
     //log.warn "debug = $debug"
-    if (debug) log.debug msg
+    if (enablelogging) log.debug msg
 }
 def description(msg){
-    def debug = settings.find{it.key == "enablelogging"}?.value
+    //def debug = settings.find{it.key == "enablelogging"}?.value
     //log.warn "debug = $debug"
     if (enabledescription) log.info msg
 }
