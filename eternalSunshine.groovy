@@ -88,14 +88,24 @@ def pageSetup() {
 
             if(sensor){
                 input "idk", "bool", title:"I don't know the maximum illuminance value for this device", submitOnChange: true, defaultValue: false
+
                 if(!idk)
                 {
                     input "maxValue", "number", title: "Select max lux value for this sensor", default: false, required:true, submitOnChange: true
                 }
                 else 
                 {
-                    paragraph "It will take up to 72 hours for the app to learn the maxium illuminance value this device can return, but it will start working immediately based on a preset value"
-                    atomicState.maxValue = atomicState.maxValue == null ? 1000 : atomicState.maxValue // temporary value
+                    if(logarithm) { app.updateSetting("logarithm",[value:"false",type:"bool"])
+
+                                   def message = "This option isn't compatible with logarithmic variations - are you sure ? If Yes, enable it again"
+                                   paragraph formatText(message, "red", "white")
+
+                                  }
+                    else 
+                    {
+                        paragraph "It will take up to 72 hours for the app to learn the maxium illuminance value this device can return, but it will start working immediately based on a preset value"
+                        atomicState.maxValue = atomicState.maxValue == null ? 1000 : atomicState.maxValue // temporary value
+                    }
                 }
                 logging( "maxValue = $atomicState.maxValue")
 
@@ -182,6 +192,8 @@ def pageSetup() {
             input"logarithm", "bool", title:"Use logarithmic variations (beta)", value:false, submitOnChange:true
             if(logarithm)
             {
+                if(idk) {app.updateSetting("idk",[value:"false",type:"bool"])
+                         message} // fool proof, idk isn't compatible with logarith
                 input "advanced", "bool", title: "Advanced logarithm settings (use with caution and with the graph helper)", submitOnChange:true, defaultValue:false
                 if(!advanced)
                 {
@@ -220,7 +232,7 @@ def advancedLogPref(){
 
     if(advanced)
     {
-        def url = "<a href='https://www.desmos.com/calculator/xzmpszawyi' target='_blank'><div style=\"color:blue;font-weight:bold\"><center>GRAPH HELPER</center></div></a>"
+        def url = "<a href='https://www.desmos.com/calculator/vi0qou21ol' target='_blank'><div style=\"color:blue;font-weight:bold\"><center>GRAPH HELPER</center></div></a>"
         //paragraph url
         input "offset", "number", range: "3..10000", required:true, title: "Offset: value named 'a' in graph tool", description:"Integer between 3 and 10000", submitOnChange:true
         logarithmPref()
@@ -283,7 +295,7 @@ def updated() {
 def initialize() {
 
     atomicState.maxValue = 1000
-    if(!idk)
+    if(!idk && !logarithm)
     {
         atomicState.maxValue = maxValue
     }
@@ -373,7 +385,7 @@ def illuminanceHandler(evt){
     def currentSensor = switchSensor2 == null || sensor2 == null ? sensor : switchSensor2?.currentValue("switch") == "switchState" ? sensor2 : sensor 
     def illum = currentSensor.currentValue("illuminance")
     def maxVal = atomicState.maxValue.toInteger()
-    if(idk && illum?.toInteger() > maxVal)
+    if(idk && illum?.toInteger() > maxVal && !logarithm)
     {
         atomicState.maxValue = illum
         logging("new maximum lux value registered as: $atomicState.maxValue")
@@ -478,7 +490,7 @@ dimmers.size() = ${dimmers.size()}
     {
         app.updateSetting("override",[value:"false",type:"bool"]) // fool proofing... override can't work with usemotion
     }
-     
+
     logging("""2: keepDimmersOff = $keepDimmersOff
 usemotion = $usemotion
 """)
@@ -574,7 +586,7 @@ illuminance sensor is: $currentSensor
 illuminance is: $illum lux
 maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "atomicState.maxValue = $atomicState.maxValue (learned value)"}
 """
-    def maxIllum = idk ? atomicState.maxValue : maxValue  // if idk selected, then use last learned max value (atomicState.maxValue)
+    def maxIllum = idk && !logarithm ? atomicState.maxValue : maxValue  // if idk selected, then use last learned max value (atomicState.maxValue)
 
 
     def y = null // value to find
@@ -751,6 +763,10 @@ def poll(){
         if(it.hasCommand("refresh")){ it.refresh() }else{logging("$it doesn't have refresh command")}
     }
 }
+def formatText(title, textColor, bckgColor){
+    return  "<div style=\"width:102%;background-color:${bckgColor};color:${textColor};padding:4px;font-weight: bold;box-shadow: 1px 2px 2px #bababa;margin-left: -10px\">${title}</div>"
+}
+
 def donate(){
     def a = """
 <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
