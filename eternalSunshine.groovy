@@ -479,7 +479,7 @@ number of dimmers that are set to 0 = ${dimmers.findAll{it.currentValue("level")
 dimmers.size() = ${dimmers.size()}
 """)
     // if we don't use motion, then keepDimmersOff is based on actual status (defined above), otherwise, it's false by default
-    // so to allow the app to continue managing the dimmers based on motion and illuminance
+    // so as to allow the app to continue managing the dimmers based on motion and illuminance
     keepDimmersOff = usemotion ? false : dimOff 
     logging("1: keepDimmersOff = $keepDimmersOff")
 
@@ -517,11 +517,11 @@ restrictedModes = $restrictedModes
     }
     else if(!usemotion && keepDimmersOff)
     {
-        log.info "dimmers are off and managed by another app, $app.label will resume when they're turned back on keepDimmersOff = $keepDimmersOff"
+        description "dimmers are off and managed by another app, $app.label will resume when they're turned back on keepDimmersOff = $keepDimmersOff"
     }
     else 
     {
-        logging("no motion...")
+        description "no motion..."
         dimmers.off() 
         switches?.off()
         if(switches) logging "${switches} turned off"
