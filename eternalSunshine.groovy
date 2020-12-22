@@ -480,12 +480,14 @@ dimmers.size() = ${dimmers.size()}
 """)
     // if we don't use motion, then keepDimmersOff is based on actual status (defined above), otherwise, it's false by default
     // so as to allow the app to continue managing the dimmers based on motion and illuminance
-    keepDimmersOff = usemotion ? false : dimOff 
+    keepDimmersOff = usemotion ? false : dimOff  //always false with motion management
     logging("1: keepDimmersOff = $keepDimmersOff")
 
     // now, if user has selected the override option, then the app will take the off status as override and not turn them back on
     // whether or not usemotion is true (a bit redundant but necessary to avoid discrepancies). 
-    keepDimmersOff = (override && dimOff && !usemotion) ? true : (usemotion ? false : dimOff)
+    keepDimmersOff = (override && dimOff && !usemotion) ? true : keepDimmersOff // if override, off and no motion mngt, keep offf
+    keepDimmersOff = otherApp ? keepDimmersOff : false // last but not least: always false if !otherApp
+    
     if(override && usemotion)
     {
         app.updateSetting("override",[value:"false",type:"bool"]) // fool proofing... override can't work with usemotion
@@ -515,9 +517,9 @@ restrictedModes = $restrictedModes
         switches?.on()
         if(switches) logging "${switches} turned off"
     }
-    else if(!usemotion && keepDimmersOff)
+    else if(Active && keepDimmersOff)
     {
-        description "dimmers are off and managed by another app, $app.label will resume when they're turned back on keepDimmersOff = $keepDimmersOff"
+        description "dimmers are off and managed by a different app, $app.label will resume when they're turned back on keepDimmersOff = $keepDimmersOff"
     }
     else 
     {
@@ -666,7 +668,14 @@ def setDimmers(int val){
     }
 
     val = val < 0 ? 0 : (val > 100 ? 100 : val) // just a precaution
-
+    if(val == 0) 
+    { 
+        dimmers.off() // it seems some hue devices don't fully turn off when simply dimmed to 0, so turn them off
+    }
+    else
+    {
+        dimmers.on() // make sure it's on, in case some other dumb device drivers don't get that 0+1 != 0... 
+    }
 
     dimmers.setLevel(val)
     logging("${dimmers} set to $val ---")
