@@ -30,7 +30,7 @@ def pageSetup() {
 
     if(atomicState.paused)
     {
-        log.debug "new app label: ${app.label}"
+        logging "new app label: ${app.label}"
         while(app.label.contains(" (Paused) "))
         {
             app.updateLabel(app.label.minus("(Paused)" ))
@@ -45,7 +45,7 @@ def pageSetup() {
         //app.updateLabel(app.label.minus(" "))
         while(app.label.contains(" (Paused) "))        {app.updateLabel(app.label.minus("(Paused)" ))}
 
-        log.debug "new app label: ${app.label}"
+        logging "new app label: ${app.label}"
     }
 
 
@@ -63,6 +63,12 @@ def pageSetup() {
         {
             atomicState.button_name = atomicState.paused == true ? "resume" : "pause"
             input "pause", "button", title: "$atomicState.button_name"
+            input "buttonPause", "capability.doubleTapableButton", title: "Pause/resume this app when I press a button", multiple: true, required: false, submitOnChange:true
+            if(buttonPause)
+            {
+                input "buttonAction", "enum", title: "Select a button action", options:["pushed", "held", "doubleTapped"], required:true, submitOnChange:true
+                input "buttonNumber", "number", title: "Select button number", required: true
+            }
         }
 
         section("Select the dimmers you wish to control") {
@@ -176,19 +182,17 @@ def pageSetup() {
                 input "switches", "capability.switch", title: "also turn on/off some light switches", multiple: true, required:false
             }
         }
-        section("Other App Conflict Management")
-        {
+        section("Other App Conflict Management"){
             input "otherApp", "bool", title: "These dimmers are turned off by another app", submitOnChange:true
             paragraph "IMPORTANT: Enable this option if you know that these dimmers might be turned off by another app"
         }
-        section("modes")        {
+        section("modes"){
             input "restrictedModes", "mode", title:"Pause this app if location is in one of these modes", required: false, multiple: true, submitOnChange: true 
         }
-        section() {
+        section(){
             label title: "Assign a name", required: false
         }
-        section("")
-        {
+        section(""){
             input"logarithm", "bool", title:"Use logarithmic variations (beta)", value:false, submitOnChange:true
             if(logarithm)
             {
@@ -205,18 +209,15 @@ def pageSetup() {
                 }
             }
         }
-        section("logging")
-        {
+        section("logging"){
             input"enablelogging", "bool", title:"Enable logging", value:false, submitOnChange:true
             input"enabledescription", "bool", title:"Enable Description Text", value:false, submitOnChange:true
         }
-        section("")
-        {
+        section(""){
             input "update", "button", title: "UPDATE"
             input "run", "button", title: "RUN"
         }
-        section("")
-        {
+        section("Support this app's development"){
             // def url = "https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6JJV76SQGDVD6&source=url"
             def url = "<a href='https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6JJV76SQGDVD6&source=url' target='_blank'><div style=\"color:blue;font-weight:bold\"><center>CLICK HERE TO SUPPORT THIS APP!</center></div></a>"
             paragraph """
@@ -278,7 +279,7 @@ def logarithmPref(){
         }
         else 
         {
-            log.debug message
+            logging message
         }
     }
 }
@@ -334,6 +335,27 @@ def initialize() {
         subscribe(dimmers[i], "level", dimmersHandler)
         subscribe(dimmers[i], "switch", switchHandler)
     }
+    if(buttonPause)
+    {
+        if(buttonAction == "pushed") 
+        {
+            //subscribe(buttonPause, "pushed", doubleTapableButtonHandler)  
+            subscribe(buttonPause, "pushed.$buttonNumber", doubleTapableButtonHandler) 
+        }
+        else if(buttonAction == "doubleTapped") 
+        {
+            //subscribe(buttonPause, "doubleTapped", doubleTapableButtonHandler)
+            subscribe(buttonPause, "doubleTapped.$buttonNumber", doubleTapableButtonHandler)
+        }
+        else if(buttonAction == "held")    
+        {
+            //subscribe(buttonPause, "held", doubleTapableButtonHandler)
+            subscribe(buttonPause, "held.$buttonNumber", doubleTapableButtonHandler)
+        }
+        
+        
+
+    }
 
     subscribe(modes, "mode", locationModeChangeHandler)
     subscribe(sensor, "illuminance", illuminanceHandler)
@@ -345,17 +367,38 @@ def initialize() {
     mainloop()
 }
 def switchHandler(evt){
-
+  if(atomicState.paused)
+    {
+        return
+    }
     if(location.mode in restrictedModes)
     {
         logging("App paused due to modes restrictions")
         return
     }
+    
     logging("$evt.device is now set to $evt.value - - SOURCE: is $evt.source TYPE is $evt.type isPhysical: ${evt.isPhysical()}")
     atomicState.lastEvent = evt.name
     //mainloop() // infinite feedback loop!
 }
+def doubleTapableButtonHandler(evt){
+
+    atomicState.paused = !atomicState.paused
+    if(atomicState.paused)
+    {
+        log.info formatText("${app.label} is now paused", "white", "red")
+    }
+    else
+    {
+        log.info formatText("Resuming ${app.label}", "white", "red")
+        updated()         
+    }
+}
 def locationModeChangeHandler(evt){
+     if(atomicState.paused)
+    {
+        return
+    }
     logging("$evt.name is now in $evt.value mode")   
     atomicState.Tname = "location mode change handler"
     atomicState.T = now() 
@@ -363,6 +406,10 @@ def locationModeChangeHandler(evt){
 }
 def dimmersHandler(evt){
 
+     if(atomicState.paused)
+    {
+        return
+    }
     if(location.mode in restrictedModes)
     {
         logging("App paused due to modes restrictions")
@@ -373,7 +420,10 @@ def dimmersHandler(evt){
     //mainloop() // infinite feedback loop if called from here...
 }
 def illuminanceHandler(evt){
-
+ if(atomicState.paused)
+    {
+        return
+    }
     if(location.mode in restrictedModes)
     {
         logging("App paused due to modes restrictions")
@@ -402,7 +452,10 @@ def illuminanceHandler(evt){
 
 }
 def motionHandler(evt){
-
+ if(atomicState.paused)
+    {
+        return
+    }
     if(location.mode in restrictedModes)
     {
         logging("App paused due to modes restrictions")
@@ -453,13 +506,20 @@ def appButtonHandler(btn) {
             atomicState.T = now() 
             mainloop()
         }
+        else
+        {
+            log.info formatText("APP IS PAUSED!", "white", "red")   
+        }
         break
 
     }
 }
 
 def mainloop(){
-
+ if(atomicState.paused)
+    {
+        return
+    }
     atomicState.T = atomicState.T != null ? atomicState.T : now()
     atomicState.T = atomicState.Tname == "end of main loop" ? atomicState.T = now() : atomicState.T // when called by schedule()
     atomicState.Tname = atomicState.Tname == "end of main loop" ? atomicState.Tname = "schedule call" :  atomicState.Tname
@@ -487,7 +547,7 @@ dimmers.size() = ${dimmers.size()}
     // whether or not usemotion is true (a bit redundant but necessary to avoid discrepancies). 
     keepDimmersOff = (override && dimOff && !usemotion) ? true : keepDimmersOff // if override, off and no motion mngt, keep offf
     keepDimmersOff = otherApp ? keepDimmersOff : false // last but not least: always false if !otherApp
-    
+
     if(override && usemotion)
     {
         app.updateSetting("override",[value:"false",type:"bool"]) // fool proofing... override can't work with usemotion
@@ -571,7 +631,10 @@ maxVal (for curtains) = $maxVal
 }
 
 def getDimVal(){
-
+ if(atomicState.paused)
+    {
+        return
+    }
     boolean switchStateTrue = switchSensor2 ? switchSensor2?.currentValue("switch") == switchState : false
     def currentSensor =  switchStateTrue ? sensor2 : sensor
     def illum = currentSensor.currentValue("illuminance")
@@ -611,7 +674,10 @@ linear dimming value result = ${dimVal}
     return dimVal.toInteger()
 }
 def getDimValLog(){ // exponential calculation
-
+ if(atomicState.paused)
+    {
+        return
+    }
     boolean switchStateTrue = switchSensor2 ? switchSensor2.currentValue("switch") == switchState : false
     def currentSensor =  switchStateTrue ? sensor2 : sensor
     def illum = currentSensor.currentValue("illuminance")
@@ -647,7 +713,10 @@ No max value in logarithmic mode..
     return dimVal
 }
 def setDimmers(int val){
-
+ if(atomicState.paused)
+    {
+        return
+    }
     def i = 0
     def s = dimmers.size()
 
