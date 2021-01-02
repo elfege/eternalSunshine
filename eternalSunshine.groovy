@@ -63,9 +63,21 @@ def pageSetup() {
         {
             atomicState.button_name = atomicState.paused == true ? "resume" : "pause"
             input "pause", "button", title: "$atomicState.button_name"
-            input "buttonPause", "capability.doubleTapableButton", title: "Pause/resume this app when I press a button", multiple: true, required: false, submitOnChange:true
+            input "buttonPause", "capability.pushableButton", title: "Pause/resume this app when I press a button", multiple: true, required: false, submitOnChange:true
             if(buttonPause)
             {
+                boolean doubletapable = buttonPause.every{element -> element.hasCapability("DoubleTapableButton")}
+                boolean holdable = buttonPause.every{element -> element.hasCapability("HoldableButton")}
+                boolean pushable = buttonPause.every{element -> element.hasCapability("PushableButton")}
+                boolean releasable = buttonPause.every{element -> element.hasCapability("ReleasableButton")}
+log.debug """
+doubletapable ? $doubletapable
+holdable ?      $holdable
+pushable ?      $pushable
+releasable ?    $releasable
+"""
+                def list = releasable ?  ["pushed", "held", "doubleTapped", "released"] : doubletap ? ["pushed", "held", "doubleTapped"] : holdable ? ["pushed", "held"] : ["push"]
+
                 input "buttonAction", "enum", title: "Select a button action", options:["pushed", "held", "doubleTapped"], required:true, submitOnChange:true
                 input "buttonNumber", "number", title: "Select button number", required: true
             }
@@ -352,8 +364,13 @@ def initialize() {
             //subscribe(buttonPause, "held", doubleTapableButtonHandler)
             subscribe(buttonPause, "held.$buttonNumber", doubleTapableButtonHandler)
         }
-        
-        
+        else if(buttonAction == "released")    
+        {
+            //subscribe(buttonPause, "released", doubleTapableButtonHandler)
+            subscribe(buttonPause, "released.$buttonNumber", doubleTapableButtonHandler)
+        }
+
+
 
     }
 
@@ -367,7 +384,7 @@ def initialize() {
     mainloop()
 }
 def switchHandler(evt){
-  if(atomicState.paused)
+    if(atomicState.paused)
     {
         return
     }
@@ -376,7 +393,7 @@ def switchHandler(evt){
         logging("App paused due to modes restrictions")
         return
     }
-    
+
     logging("$evt.device is now set to $evt.value - - SOURCE: is $evt.source TYPE is $evt.type isPhysical: ${evt.isPhysical()}")
     atomicState.lastEvent = evt.name
     //mainloop() // infinite feedback loop!
@@ -395,7 +412,7 @@ def doubleTapableButtonHandler(evt){
     }
 }
 def locationModeChangeHandler(evt){
-     if(atomicState.paused)
+    if(atomicState.paused)
     {
         return
     }
@@ -406,7 +423,7 @@ def locationModeChangeHandler(evt){
 }
 def dimmersHandler(evt){
 
-     if(atomicState.paused)
+    if(atomicState.paused)
     {
         return
     }
@@ -420,7 +437,7 @@ def dimmersHandler(evt){
     //mainloop() // infinite feedback loop if called from here...
 }
 def illuminanceHandler(evt){
- if(atomicState.paused)
+    if(atomicState.paused)
     {
         return
     }
@@ -452,7 +469,7 @@ def illuminanceHandler(evt){
 
 }
 def motionHandler(evt){
- if(atomicState.paused)
+    if(atomicState.paused)
     {
         return
     }
@@ -516,7 +533,7 @@ def appButtonHandler(btn) {
 }
 
 def mainloop(){
- if(atomicState.paused)
+    if(atomicState.paused)
     {
         return
     }
@@ -631,7 +648,7 @@ maxVal (for curtains) = $maxVal
 }
 
 def getDimVal(){
- if(atomicState.paused)
+    if(atomicState.paused)
     {
         return
     }
@@ -674,7 +691,7 @@ linear dimming value result = ${dimVal}
     return dimVal.toInteger()
 }
 def getDimValLog(){ // exponential calculation
- if(atomicState.paused)
+    if(atomicState.paused)
     {
         return
     }
@@ -713,7 +730,7 @@ No max value in logarithmic mode..
     return dimVal
 }
 def setDimmers(int val){
- if(atomicState.paused)
+    if(atomicState.paused)
     {
         return
     }
