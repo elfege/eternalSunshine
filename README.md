@@ -1,7 +1,7 @@
 # eternalSunshine
 App that sets dimmers with luminescence and that allows you to select the following options:
 
-- #Motion sensors
+- # Motion sensors
 Set different timeouts dealys with each location modes of your choice
 - #Customizable Max Lux value for your dimmer
 - #Basic Machine Learning: 
