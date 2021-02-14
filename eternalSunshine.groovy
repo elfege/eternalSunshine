@@ -245,7 +245,7 @@ def advancedLogPref(){
 
     if(advanced)
     {
-        def url = "<a href='https://www.desmos.com/calculator/vi0qou21ol' target='_blank'><div style=\"color:blue;font-weight:bold\"><center>GRAPH HELPER</center></div></a>"
+        def url = "<a href='https://www.desmos.com/calculator/vi0qou21ol' target='_blank'><div style=\"color:blue;font-weight:bold\"><center>CLICK HERE TO OPEN THE GRAPH HELPER</center></div></a>"
         //paragraph url
         input "offset", "number", range: "3..10000", required:true, title: "Offset: value named 'a' in graph tool", description:"Integer between 3 and 10000", submitOnChange:true
         logarithmPref()
@@ -274,7 +274,7 @@ c = 70  (multiplier; sets the gradient of the curve)
 def logarithmPref(){
 
     def title = advanced ? "Base: value named 'b' in the graph tool (decimal value such as '5.0' or '4.9')" : "set a sensitivity value"
-    input "sensitivity", "decimal", range: "3.0..10.0", required:true, title: "$title", description:"DECIMAL between 3.0 and 10.0", submitOnChange:true // serves as xa basis in linear determination of log() function's multiplier
+    input "sensitivity", "decimal", range: "1.0..50.0", required:true, title: "$title", description:"DECIMAL between 1.0 and 50.0", submitOnChange:true // serves as xa basis in linear determination of log() function's multiplier
     if(!advanced)
     {
         paragraph "The higher the value, the more luminance will be needed for $app.name to turn off your lights. For a maximum illuminance of 1000 (max value for most indoor sensors), a value between 5.0 and 6.0 is recommended"
@@ -282,7 +282,7 @@ def logarithmPref(){
 
     if(sensitivity)
     {
-        boolean wrong = sensitivity > 10.0 || sensitivity < 3.0
+        boolean wrong = sensitivity > 50.0 || sensitivity < 1.0
         def message = "${wrong ? "WRONG VALUE PLEASE SET A VALUE BETWEEN 3 and 10!" : "sensitivity set to $sensitivity"}"
 
         if(wrong) {
@@ -641,7 +641,7 @@ maxVal (for curtains) = $maxVal
     }
     else
     {
-        description "${performance} seconds between $atomicState.Tname to 'end of main loop'"
+        logging "${performance} seconds between $atomicState.Tname to 'end of main loop'"
     }
     atomicState.Tname = "end of main loop"
     atomicState.T = now()
