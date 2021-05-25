@@ -17,7 +17,7 @@ For example, if you close your curtains/blinders, providing your main sensor is 
 - ## Turn off your curtains with illuminance and temperature 
 Using the same switch as the one mentioned above, close/open your curtains/blinds depending on outside illuminance (if you have, for example, a sensor placed in front of a souht facing window) and inside temperature. This allows you to have your curtains close automatically when it gets too hot inside due to reverberation and thus to save some substantial amount of AC power (you might also want to take a look at my Thermostat Manager, which offers some very cool features too!). 
 
-- ##NEW as of May 25 2021: Improved user override: ## Set your dimmers manually or turn them off and the app will pause for a given time (to be specified in settings). 
+- ## NEW as of May 25 2021: Improved user override: ## Set your dimmers manually or turn them off and the app will pause for a given time (to be specified in settings). 
 
 Feel free to send your feedback over Hubitat's community thread: 
 https://community.hubitat.com/t/release-eternal-sunshine-luminescence-and-dimmers/34744/94 
