@@ -70,7 +70,7 @@ def pageSetup() {
                 boolean holdable = buttonPause.every{element -> element.hasCapability("HoldableButton")}
                 boolean pushable = buttonPause.every{element -> element.hasCapability("PushableButton")}
                 boolean releasable = buttonPause.every{element -> element.hasCapability("ReleasableButton")}
-log.debug """
+                log.debug """
 doubletapable ? $doubletapable
 holdable ?      $holdable
 pushable ?      $pushable
@@ -85,21 +85,20 @@ releasable ?    $releasable
 
         section("Select the dimmers you wish to control") {
             input "dimmers", "capability.switchLevel", title: "pick a dimmer", required:true, multiple: true
-            input "override", "bool", title: "OVERRIDE ? (prevents conflicts with other motion lighting apps)", defaultValue: false, submitOnChange:true
-            if(override)
-            {
-                def message = "error"
-                if(usemotion)
-                {
-                    app.updateSetting("override",[value:"false",type:"bool"]) // fool proofing...
-                    message = "You cannot use the override option and motion sensors at the same time!"
-                }
-                else {
-                    message = "It is strongly advised not to use this app in parallel with any other motion lighting app controling the same dimmers. This option (OVERRIDE) may not work depending on your setup or even depending on the quality of your mesh network. If you see that your lights turn on/off constantly when there is no motion, please uninstall your motion lighting app, disable the override option and use the motion lighting built-in within this app for better compatibility. Thank you!"
-                }
 
-                paragraph "<div style=\"width:102%;background-color:#1C2BB7;color:red;padding:4px;font-weight: bold;box-shadow: 1px 2px 2px #bababa;margin-left: -10px\">${message}</div>"
+        }
+        section("Override and potential app conflict management"){
+            input "override", "bool", title: "Allow user override (adjut the light to a new setting when prefered)", defaultValue: false, submitOnChange:true
+
+            if(override) // if override, otherAPp is true by default
+            {
+                input "overrideDuration", "number", title: "Ovrride this app for how long?", description: "time in hours"
+                app.updateSetting("otherApp", [type:"bool", value:true])  
             }
+
+            input "otherApp", "bool", title: "These dimmers are turned off by another app", submitOnChange:true
+            paragraph "IMPORTANT: Enable this option if you know that these dimmers might be turned off by another app"
+            if(override) paragraph "This option is automatically set to true if you enabled 'Allow user override'" 
         }
         section("Select Illuminance Sensor") {
             input "sensor", "capability.illuminanceMeasurement", title: "pick a sensor", required:true, multiple: false, submitOnChange: true
@@ -172,7 +171,7 @@ releasable ?    $releasable
             input "usemotion", "bool", title: "Turn On / Off with Motion", submitOnChange: true
             if(usemotion)
             {
-                input "motionSensors", "capability.motionSensor", title: "Turn lights on with motion", despcription: "pick a motion sensor", required:false, multiple:true, submitOnChange:true
+                input "motionSensors", "capability.motionSensor", title: "Select your motion sensor(s)", despcription: "pick a motion sensor", required:false, multiple:true, submitOnChange:true
                 if(motionSensors)
                 {
                     input "noMotionTime", "number", title: "turn back off after how long?", required: true, description: "time in minutes"
@@ -186,7 +185,7 @@ releasable ?    $releasable
                             atomicState.timeoutValMode = []
                             def timeoutValMode = []
                             for(timeoutModes.size() != 0; i < timeoutModes.size(); i++){
-                                input "timeoutValMode${i}", "number", required:true, title: "select a timeout value for ${timeoutModes[i]}"
+                                input "timeoutValMode${i}", "number", required:true, title: "select a timeout value for ${timeoutModes[i]} ", description:"Time in minutes"
                             }
                         }
                     }
@@ -194,10 +193,7 @@ releasable ?    $releasable
                 input "switches", "capability.switch", title: "also turn on/off some light switches", multiple: true, required:false
             }
         }
-        section("Other App Conflict Management"){
-            input "otherApp", "bool", title: "These dimmers are turned off by another app", submitOnChange:true
-            paragraph "IMPORTANT: Enable this option if you know that these dimmers might be turned off by another app"
-        }
+
         section("modes"){
             input "restrictedModes", "mode", title:"Pause this app if location is in one of these modes", required: false, multiple: true, submitOnChange: true 
         }
@@ -274,7 +270,7 @@ c = 70  (multiplier; sets the gradient of the curve)
 def logarithmPref(){
 
     def title = advanced ? "Base: value named 'b' in the graph tool (decimal value such as '5.0' or '4.9')" : "set a sensitivity value"
-    input "sensitivity", "decimal", range: "1.0..50.0", required:true, title: "$title", description:"DECIMAL between 1.0 and 50.0", submitOnChange:true // serves as xa basis in linear determination of log() function's multiplier
+    input "sensitivity", "decimal", range: "1.0..200.0", required:true, title: "$title", description:"DECIMAL between 1.0 and 50.0", submitOnChange:true // serves as xa basis in linear determination of log() function's multiplier
     if(!advanced)
     {
         paragraph "The higher the value, the more luminance will be needed for $app.name to turn off your lights. For a maximum illuminance of 1000 (max value for most indoor sensors), a value between 5.0 and 6.0 is recommended"
@@ -282,8 +278,8 @@ def logarithmPref(){
 
     if(sensitivity)
     {
-        boolean wrong = sensitivity > 50.0 || sensitivity < 1.0
-        def message = "${wrong ? "WRONG VALUE PLEASE SET A VALUE BETWEEN 3 and 10!" : "sensitivity set to $sensitivity"}"
+        boolean wrong = sensitivity > 200.0 || sensitivity < 1.0
+        def message = "${wrong ? "WRONG VALUE PLEASE SET A VALUE BETWEEN 1 and 200!" : "sensitivity set to $sensitivity"}"
 
         if(wrong) {
             paragraph "<div style=\"width:102%;background-color:red;color:black;padding:4px;font-weight: bold;box-shadow: 10px 10px 10px #141414;margin-left: -10px\">${message}</div>"
@@ -323,7 +319,12 @@ def initialize() {
     }
 
     atomicState.motionEvents = 0
+
+    //user input override variables
     atomicState.override = false
+    atomicState.overrideTime = now()
+    atomicState.lastDimValSetByApp = false 
+
     atomicState.lastDimVal = dimmers[0].currentValue("level")
 
 
@@ -432,7 +433,21 @@ def dimmersHandler(evt){
         logging("App paused due to modes restrictions")
         return
     }
-    logging("** $evt.device set to $evt.value **")
+    log.debug """
+$evt.device set to $evt.value 
+atomicState.lastDimValSetByApp = $atomicState.lastDimValSetByApp 
+atomicState.override=$atomicState.override """
+
+    atomicState.lastDimValSetByApp = atomicState.lastDimValSetByApp != null ? atomicState.lastDimValSetByApp : true
+
+    if(override && !atomicState.lastDimValSetByApp && !atomicState.override)
+    {
+        log.trace "USER OVERRIDE (will be canceled in 2 hours)"
+        atomicState.overrideTime = now()
+        atomicState.override = true
+    }
+
+    //atomicState.lastDimValSetByApp = false // get ready for a new user input 
 
     //mainloop() // infinite feedback loop if called from here...
 }
@@ -479,7 +494,7 @@ def motionHandler(evt){
         return
     }
 
-    logging("MOTION ----- $evt.device is $evt.value")
+    log.trace "MOTION ----- $evt.device is $evt.value"
 
     if(usemotion) 
     {
@@ -537,6 +552,7 @@ def mainloop(){
     {
         return
     }
+
     atomicState.T = atomicState.T != null ? atomicState.T : now()
     atomicState.T = atomicState.Tname == "end of main loop" ? atomicState.T = now() : atomicState.T // when called by schedule()
     atomicState.Tname = atomicState.Tname == "end of main loop" ? atomicState.Tname = "schedule call" :  atomicState.Tname
@@ -546,6 +562,23 @@ def mainloop(){
         logging("App paused due to modes restrictions")
         return
     }
+    atomicState.overrideTime = atomicState.overrideTime != null ? atomicState.overrideTime : now()
+
+    if(override)
+    {
+        if(atomicState.override && now() - atomicState.overrideTime < 10*1000 /*overrideDuration*60*60*1000*/)
+        {
+            log.trace("App paused for $overrideDuration ${overrideDuration>1 ? "hours":"hour"} due to user's manual input override")  
+            return
+        }
+        else if(atomicState.override && atomicState.overrideTime >= 10*1000 /*overrideDuration*60*60*1000*/)
+        {
+            atomicState.override = false
+            atomicState.lastDimValSetByApp = true // prevent false positive on next cycle
+            log.trace "END OF OVERRIDE, RESUMING NORMAL OPERATION"
+        }
+    }
+
     boolean Active = stillActive()
     boolean dimOff = dimmers.findAll{it.currentValue("switch") == "off"}.size() == dimmers.size() 
     boolean keepDimmersOff = false
@@ -555,25 +588,10 @@ number of dimmers that are off = ${dimmers.findAll{it.currentValue("switch") == 
 number of dimmers that are set to 0 = ${dimmers.findAll{it.currentValue("level") == 0}.size()}
 dimmers.size() = ${dimmers.size()}
 """)
-    // if we don't use motion, then keepDimmersOff is based on actual status (defined above), otherwise, it's false by default
-    // so as to allow the app to continue managing the dimmers based on motion and illuminance
-    keepDimmersOff = usemotion ? false : dimOff  //always false with motion management
-    logging("1: keepDimmersOff = $keepDimmersOff")
+ 
+    keepDimmersOff = usemotion ? dimOff && (otherApp || override) && !atomicState.turnedOffByNoMotionEvent : dimOff && (otherApp || override)
 
-    // now, if user has selected the override option, then the app will take the off status as override and not turn them back on
-    // whether or not usemotion is true (a bit redundant but necessary to avoid discrepancies). 
-    keepDimmersOff = (override && dimOff && !usemotion) ? true : keepDimmersOff // if override, off and no motion mngt, keep offf
-    keepDimmersOff = otherApp ? keepDimmersOff : false // last but not least: always false if !otherApp
-
-    if(override && usemotion)
-    {
-        app.updateSetting("override",[value:"false",type:"bool"]) // fool proofing... override can't work with usemotion
-    }
-
-    logging("""2: keepDimmersOff = $keepDimmersOff
-usemotion = $usemotion
-""")
-
+  
 
     logging("""
 usemotion = $usemotion
@@ -586,47 +604,62 @@ location.mode = ${location.mode}
 restrictedModes = $restrictedModes
 
 """)
+    
+    // TEST TEST 
+    //Active = false
 
-    if(Active && !keepDimmersOff)
+    if(Active && (!keepDimmersOff || atomicState.turnedOffByNoMotionEvent))
     {
+        atomicState.turnedOffByNoMotionEvent = false
         def dimVal = logarithm ? getDimValLog() : getDimVal()
+        //atomicState.lastDimValSetByApp = true // set by setDimmer()
         setDimmers(dimVal)
-        switches?.on()
+        runIn(2, resetLastDimBool) // get ready for a new user manual override input 
+        //switches?.on()
         if(switches) logging "${switches} turned off"
     }
     else if(Active && keepDimmersOff)
     {
-        description "dimmers are off and managed by a different app, $app.label will resume when they're turned back on keepDimmersOff = $keepDimmersOff"
+        def message = ""
+        if(override) message = "App in override mode for $overrideDuration ${overrideDuration > 1 ? "hours":"hour"} - or dimmers turned off by a different app or by user"
+        if(!override) message "dimmers are off and managed by a different app, $app.label will resume when they're turned back on keepDimmersOff = $keepDimmersOff"
+        description message
     }
     else 
     {
         description "no motion..."
+        atomicState.turnedOffByNoMotionEvent = true
         dimmers.off() 
         switches?.off()
         if(switches) logging "${switches} turned off"
     }
+    
+      if(atomicState.turnedOffByNoMotionEvent)
+    {
+        log.trace "keeDimmersOff not set to true because atomicState.turnedOffByNoMotionEvent = true : turned off by no motion event, not user or other app input"
+    }
 
     if(highLuxSwitch)
     {
-        def outsideIllum = sensor.currentValue("illuminance").toInteger()
+        def illuminance = sensor.currentValue("illuminance").toInteger()
         def maxVal = atomicState.maxValue != null ? atomicState.maxValue.toInteger() : maxValue.toInteger()
-        def NeedCurtainOff = onlyIfTempHigh ? highTempSensor.currentValue("temperature") >= tempThreshold && outsideIllum >= maxVal : outsideIllum >= maxVal
+        def NeedCurtainOff = onlyIfTempHigh ? highTempSensor.currentValue("temperature") >= tempThreshold && illuminance >= maxVal : illuminance >= maxVal
 
 
         description """*********
-outsideIllum = $outsideIllum
+measured illuminance = $illuminance
 maxVal (for curtains) = $maxVal
 
 """
         atomicState.curtainsWereTurnedOff = atomicState.curtainsWereTurnedOff != null ? atomicState.curtainsWereTurnedOff : false
 
-        if(NeedCurtainOff && !atomicState.curtainsWereTurnedOff)
+        if(switchSensor2 && NeedCurtainOff && !atomicState.curtainsWereTurnedOff)
         {
             switchSensor2."${switchState}"()
             atomicState.curtainsWereTurnedOff = true
             logging "turning $switchSensor2 $switchState due to excess of illuminance"
         }
-        else if(!NeedCurtainOff && toggleBack && atomicState.curtainsWereTurnedOff)
+        else if(switchSensor2 && !NeedCurtainOff && toggleBack && atomicState.curtainsWereTurnedOff)
         {
             switchSensor2."${switchState == "off" ? "on" : "off"}"()
             atomicState.curtainsWereTurnedOff = false
@@ -635,23 +668,26 @@ maxVal (for curtains) = $maxVal
 
     }
     float performance = (now() - atomicState.T)/1000
-    if(performance > 1)
-    {
-        logwarn "TOTAL EXECUTION TIME between $atomicState.Tname and 'end of main loop' = ${performance} seconds - HUB IS SLOW"
+    if(performance > 1){
+        //logwarn "TOTAL EXECUTION TIME between $atomicState.Tname and 'end of main loop' = ${performance} seconds - HUB IS SLOW"
     }
-    else
-    {
+    else{
         logging "${performance} seconds between $atomicState.Tname to 'end of main loop'"
     }
+
+    
     atomicState.Tname = "end of main loop"
     atomicState.T = now()
 }
-
+def resetLastDimBool(){
+    atomicState.lastDimValSetByApp = false
+}
 def getDimVal(){
     if(atomicState.paused)
     {
         return
     }
+
     boolean switchStateTrue = switchSensor2 ? switchSensor2?.currentValue("switch") == switchState : false
     def currentSensor =  switchStateTrue ? sensor2 : sensor
     def illum = currentSensor.currentValue("illuminance")
@@ -688,9 +724,10 @@ maxValue = ${maxValue ? "$maxValue (user defined value, no learning)" : "atomicS
 
 linear dimming value result = ${dimVal} 
 """
+
     return dimVal.toInteger()
 }
-def getDimValLog(){ // exponential calculation
+def getDimValLog(){ // logarithmic 
     if(atomicState.paused)
     {
         return
@@ -726,7 +763,7 @@ No max value in logarithmic mode..
     dimVal = otherApp ? (dimVal < 1 ? dimVal = 1 : dimVal) : (dimVal < 0 ? dimVal = 0 : dimVal)
     dimVal = dimVal > 100 ? 100 : dimVal 
 
-    logging "LOGARITHMIC dimming value = ${dimVal} (illuminance: $illum)"
+    log.debug "LOGARITHMIC dimming value = ${dimVal} (illuminance: $illum)"
     return dimVal
 }
 def setDimmers(int val){
@@ -734,6 +771,9 @@ def setDimmers(int val){
     {
         return
     }
+
+    atomicState.lastDimValSetByApp = true
+
     def i = 0
     def s = dimmers.size()
 
@@ -784,13 +824,14 @@ boolean stillActive(){
         long deltaMinutes = timeout * 1000 * 60   
         int s = motionSensors.size() 
         int i = 0
-
-        boolean AnyCurrentlyActive = motionSensors.findAll{it.currentValue("motion") == "active"}?.size() != 0
-        if(AnyCurrentlyActive) 
+        /******************************BEFORE COLLECTION**********************************************************/
+        //this is faster to check if a sensor is still active than to collect past events, so return true if it's the case    
+        if(motionSensors.any{it -> it.currentValue("motion") == "active"})
         {
-            //description("return true")
-            return true  // for faster execution when true
+            log.debug "Sensor still active: ${motionSensors.findAll{it.currentValue("motion") == "active"}}"
+            return true
         }
+        /*********************************************************************************************************/
 
 
         // if not triggered by motion event, then look for past events of each sensor
